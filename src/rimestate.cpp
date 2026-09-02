@@ -227,7 +227,11 @@ void RimeState::updatePreedit(InputContext *ic, const RimeContext &context) {
     ic->inputPanel().setClientPreedit(clientPreedit);
 }
 
-void RimeState::updateUI(InputContext *ic, bool keyRelease) {
+void RimeState::updateUI(InputContext *ic, bool keyRelease,
+                         bool clearReservedComments) {
+    if (clearReservedComments) {
+        clearReservedCommentIndices();
+    }
     auto &inputPanel = ic->inputPanel();
     if (!keyRelease) {
         inputPanel.reset();
@@ -324,6 +328,27 @@ void RimeState::createSession() {
             api->set_option(session_, key.data(), value);
         }
     }
+}
+
+void RimeState::setAccentCommentIndices(std::unordered_set<int> indices) {
+    accentCommentIndices_ = std::move(indices);
+}
+
+void RimeState::setWarningCommentIndices(std::unordered_set<int> indices) {
+    warningCommentIndices_ = std::move(indices);
+}
+
+const std::unordered_set<int> &RimeState::accentCommentIndices() const {
+    return accentCommentIndices_;
+}
+
+const std::unordered_set<int> &RimeState::warningCommentIndices() const {
+    return warningCommentIndices_;
+}
+
+void RimeState::clearReservedCommentIndices() {
+    accentCommentIndices_.clear();
+    warningCommentIndices_.clear();
 }
 
 } // namespace fcitx

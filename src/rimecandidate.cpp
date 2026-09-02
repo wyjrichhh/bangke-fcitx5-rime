@@ -6,17 +6,19 @@
 
 #include "rimecandidate.h"
 #include <cstring>
+#include <unordered_set>
 
 namespace fcitx {
 
 RimeCandidateWord::RimeCandidateWord(RimeEngine *engine,
-                                     const RimeCandidate &candidate, KeySym sym)
+                                     const RimeCandidate &candidate, KeySym sym,
+                                     TextFormatFlags commentFlag)
     : CandidateWord(), engine_(engine), sym_(sym) {
     Text text;
     text.append(std::string(candidate.text));
     if (candidate.comment && strlen(candidate.comment)) {
         text.append(" ");
-        text.append(std::string(candidate.comment));
+        text.append(std::string(candidate.comment), commentFlag);
     }
     setText(text);
 }
@@ -36,6 +38,13 @@ RimeCandidateList::RimeCandidateList(RimeEngine *engine, InputContext *ic,
     setPageable(this);
 
     const auto &menu = context.menu;
+
+    std::unordered_set<int> accentIndices;
+    std::unordered_set<int> warningIndices;
+    if (auto *state = engine->state(ic)) {
+        accentIndices = state->accentCommentIndices();
+        warningIndices = state->warningCommentIndices();
+    }
 
     int num_select_keys = menu.select_keys ? strlen(menu.select_keys) : 0;
     bool has_label = RIME_STRUCT_HAS_MEMBER(context, context.select_labels) &&
@@ -60,8 +69,14 @@ RimeCandidateList::RimeCandidateList(RimeEngine *engine, InputContext *ic,
         } else {
             sym = static_cast<KeySym>('0' + (i + 1) % 10);
         }
+        TextFormatFlags commentFlag = TextFormatFlag::NoFlag;
+        if (accentIndices.count(i)) {
+            commentFlag = TextFormatFlag::HighLight;
+        } else if (warningIndices.count(i)) {
+            commentFlag = TextFormatFlag::Bold;
+        }
         candidateWords_.emplace_back(std::make_unique<RimeCandidateWord>(
-            engine, menu.candidates[i], sym));
+            engine, menu.candidates[i], sym, commentFlag));
 
         if (i == menu.highlighted_candidate_index) {
             cursor_ = i;

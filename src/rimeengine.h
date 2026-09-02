@@ -24,6 +24,7 @@
 #include <fcitx/menu.h>
 #include <memory>
 #include <rime_api.h>
+#include <string_view>
 
 namespace fcitx {
 
@@ -105,7 +106,13 @@ private:
     void deploy();
     void sync();
     void updateSchemaMenu();
-    void notify(const std::string &type, const std::string &value);
+    void notify(RimeSessionId session, const std::string &type,
+                const std::string &value);
+    void handleReservedProperty(RimeSessionId session,
+                                std::string_view messageValue);
+    static void applyReservedPropertyState(RimeState &state,
+                                           std::string_view key,
+                                           std::string_view value);
 
     IconTheme theme_;
     Instance *instance_;

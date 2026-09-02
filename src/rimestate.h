@@ -8,6 +8,7 @@
 
 #include "rimeengine.h"
 #include <fcitx/inputcontextproperty.h>
+#include <unordered_set>
 
 namespace fcitx {
 
@@ -21,13 +22,20 @@ public:
     void keyEvent(KeyEvent &event);
     bool getStatus(RimeStatus *status);
     void updatePreedit(InputContext *ic, const RimeContext &context);
-    void updateUI(InputContext *ic, bool keyRelease);
+    void updateUI(InputContext *ic, bool keyRelease,
+                  bool clearReservedComments = true);
     void release();
     void commitPreedit(InputContext *ic);
     std::string subMode();
     std::string subModeLabel();
     void setLatinMode(bool latin);
     void selectSchema(const std::string &schemaId);
+    RimeSessionId session() const { return session_; }
+    void setAccentCommentIndices(std::unordered_set<int> indices);
+    void setWarningCommentIndices(std::unordered_set<int> indices);
+    const std::unordered_set<int> &accentCommentIndices() const;
+    const std::unordered_set<int> &warningCommentIndices() const;
+    void clearReservedCommentIndices();
 
 private:
     void createSession();
@@ -36,6 +44,9 @@ private:
     RimeEngine *engine_;
     RimeSessionId session_ = 0;
     InputContext &ic_;
+
+    std::unordered_set<int> accentCommentIndices_;
+    std::unordered_set<int> warningCommentIndices_;
 };
 } // namespace fcitx
 

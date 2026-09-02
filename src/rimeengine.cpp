@@ -6,6 +6,7 @@
 
 #include "rimeengine.h"
 #include "notifications_public.h"
+#include "reservedproperty.h"
 #include "rimestate.h"
 #include <cstring>
 #include <dirent.h>
@@ -333,13 +334,13 @@ void RimeEngine::rimeNotificationHandler(void *context, RimeSessionId session,
                  << messageValue;
     RimeEngine *that = static_cast<RimeEngine *>(context);
     that->eventDispatcher_.schedule(
-        [that, messageType = std::string(messageType),
+        [that, session, messageType = std::string(messageType),
          messageValue = std::string(messageValue)]() {
-            that->notify(messageType, messageValue);
+            that->notify(session, messageType, messageValue);
         });
 }
 
-void RimeEngine::notify(const std::string &messageType,
+void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
                         const std::string &messageValue) {
     const char *message = nullptr;
     const char *icon = "";
@@ -370,6 +371,8 @@ void RimeEngine::notify(const std::string &messageType,
         } else if (messageValue == "simplification") {
             message = _("Simplified Chinese is enabled.");
         }
+    } else if (messageType == "property") {
+        handleReservedProperty(session, messageValue);
     }
 
     auto notifications = this->notifications();
@@ -386,6 +389,57 @@ void RimeEngine::notify(const std::string &messageType,
             }
             return true;
         });
+}
+
+void RimeEngine::handleReservedProperty(RimeSessionId session,
+                                        std::string_view messageValue) {
+    auto keyValue = reservedproperty::splitKeyValue(messageValue);
+    if (!keyValue) {
+        return;
+    }
+    const std::string_view key = keyValue->first;
+    const std::string_view value = keyValue->second;
+
+    // Action key: ask the frontend to re-pull the candidate menu because an
+    // async task has produced new candidates. Runs on the event loop (via the
+    // scheduled notify()), so touching the input panel here is safe.
+    if (key == reservedproperty::kRefreshUI) {
+        instance_->inputContextManager().foreach(
+            [this, session](InputContext *ic) {
+                if (auto *state = this->state(ic)) {
+                    if (state->session() == session) {
+                        state->updateUI(ic, /*keyRelease=*/false,
+                                        /*clearReservedComments=*/false);
+                    }
+                }
+                return true;
+            });
+        return;
+    }
+
+    // State keys: cache per-index comment styling on whichever IC owns the
+    // session. The plugin re-publishes on every Compose(); an empty value
+    // clears.
+    instance_->inputContextManager().foreach(
+        [this, session, key, value](InputContext *ic) {
+            if (auto *state = this->state(ic)) {
+                if (state->session() == session) {
+                    applyReservedPropertyState(*state, key, value);
+                }
+            }
+            return true;
+        });
+}
+
+void RimeEngine::applyReservedPropertyState(RimeState &state,
+                                            std::string_view key,
+                                            std::string_view value) {
+    if (key == reservedproperty::kCommentHighlight) {
+        state.setAccentCommentIndices(reservedproperty::parseIndices(value));
+    } else if (key == reservedproperty::kCommentWarning) {
+        state.setWarningCommentIndices(reservedproperty::parseIndices(value));
+    }
+    // _refresh_ui is an action, handled in handleReservedProperty().
 }
 
 RimeState *RimeEngine::state(InputContext *ic) {

@@ -8,6 +8,7 @@
 
 #include "rimeengine.h"
 #include "rimestate.h"
+#include <fcitx-utils/textformatflags.h>
 #include <fcitx/candidatelist.h>
 
 namespace fcitx {
@@ -15,7 +16,8 @@ namespace fcitx {
 class RimeCandidateWord : public CandidateWord {
 public:
     RimeCandidateWord(RimeEngine *engine, const RimeCandidate &candidate,
-                      KeySym sym);
+                      KeySym sym,
+                      TextFormatFlags commentFlag = TextFormatFlag::NoFlag);
 
     void select(InputContext *inputContext) const override;
 
