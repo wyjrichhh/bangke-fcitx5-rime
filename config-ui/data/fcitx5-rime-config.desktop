@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Rime 配置
+Name[en]=Rime Configuration
+Comment=配置 Rime 输入法（含 AI 预测）
+Comment[en]=Configure the Rime input method (including AI prediction)
+Exec=fcitx5-rime-config
+Icon=fcitx-rime
+Categories=System;Qt;Utility;
+Terminal=false
