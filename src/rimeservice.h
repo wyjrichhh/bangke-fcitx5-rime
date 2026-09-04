@@ -24,6 +24,7 @@ public:
     void setSchema(const std::string &schema);
     std::string currentSchema();
     std::vector<std::string> listAllSchemas();
+    void deploy();
 
 private:
     RimeState *currentState();
@@ -32,6 +33,7 @@ private:
     FCITX_OBJECT_VTABLE_METHOD(setSchema, "SetSchema", "s", "");
     FCITX_OBJECT_VTABLE_METHOD(currentSchema, "GetCurrentSchema", "", "s");
     FCITX_OBJECT_VTABLE_METHOD(listAllSchemas, "ListAllSchemas", "", "as");
+    FCITX_OBJECT_VTABLE_METHOD(deploy, "Deploy", "", "");
 
     RimeEngine *engine_;
 };

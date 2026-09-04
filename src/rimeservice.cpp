@@ -82,4 +82,6 @@ std::vector<std::string> RimeService::listAllSchemas() {
     return schemas;
 }
 
+void RimeService::deploy() { engine_->deploy(); }
+
 } // namespace fcitx

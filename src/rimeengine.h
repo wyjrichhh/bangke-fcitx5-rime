@@ -93,6 +93,8 @@ public:
 
     void rimeStart(bool fullcheck);
 
+    void deploy();
+
     RimeState *state(InputContext *ic);
 
     FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
@@ -103,7 +105,6 @@ private:
                                         const char *message_type,
                                         const char *message_value);
 
-    void deploy();
     void sync();
     void updateSchemaMenu();
     void notify(RimeSessionId session, const std::string &type,
@@ -124,6 +125,7 @@ private:
     std::unique_ptr<Action> imAction_;
     SimpleAction deployAction_;
     SimpleAction syncAction_;
+    SimpleAction configAction_;
 
     RimeEngineConfig config_;
     std::unordered_map<std::string, std::unordered_map<std::string, bool>>

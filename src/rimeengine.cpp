@@ -14,6 +14,7 @@
 #include <fcitx-utils/fs.h>
 #include <fcitx-utils/i18n.h>
 #include <fcitx-utils/log.h>
+#include <fcitx-utils/misc.h>
 #include <fcitx-utils/standardpath.h>
 #include <fcitx/candidatelist.h>
 #include <fcitx/inputcontext.h>
@@ -136,6 +137,14 @@ RimeEngine::RimeEngine(Instance *instance)
     });
     instance_->userInterfaceManager().registerAction("fcitx-rime-sync",
                                                      &syncAction_);
+
+    configAction_.setIcon("fcitx-rime-deploy");
+    configAction_.setShortText(_("Rime Settings"));
+    configAction_.connect<SimpleAction::Activated>([](InputContext *) {
+        startProcess({"fcitx5-rime-config"});
+    });
+    instance_->userInterfaceManager().registerAction("fcitx-rime-config",
+                                                     &configAction_);
     reloadConfig();
 }
 
@@ -288,13 +297,19 @@ void RimeEngine::updateConfig() {
     instance_->inputContextManager().registerProperty("rimeState", &factory_);
     updateSchemaMenu();
 }
-void RimeEngine::activate(const InputMethodEntry &, InputContextEvent &event) {
+void RimeEngine::activate(const InputMethodEntry &entry,
+                           InputContextEvent &event) {
+    // 菜单文字跟 IM 注册名走（inputmethod/rime.conf 的 Name=，打包脚本注入），
+    // 改名只需重打包，无需重编 addon。
+    configAction_.setShortText(entry.name() + " 设置");
     event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
                                                  imAction_.get());
     event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
                                                  &deployAction_);
     event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
                                                  &syncAction_);
+    event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
+                                                 &configAction_);
 }
 void RimeEngine::deactivate(const InputMethodEntry &entry,
                             InputContextEvent &event) {
