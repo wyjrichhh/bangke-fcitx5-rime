@@ -1,6 +1,18 @@
 #!/bin/bash
+# 在 ubuntu:22.04 容器里构建（用最老的发行版做基线，glibc 向后兼容）。
+#
+# 挂载两个目录：
+#   /priv  ← 私有库 ~/bangke/commit/fcitx5-rime（addon + config-ui + data，本次要改的）
+#   /src   ← 开源库与第三方产物 ~/bangke/openSource（librime、插件、模型、捆绑库）
+#
+#   docker run --rm -v ~/bangke/commit/fcitx5-rime:/priv -v ~/bangke/openSource:/src \
+#     ubuntu:22.04 bash /priv/dist/build-22.04.sh
+#
+# 只改了私有代码（比如 config-ui）时用 SKIP_LIBRIME=1 跳过最慢的 librime 重建
+# （librime 是第三方产物，不复用会白等十几分钟）。
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
+SKIP_LIBRIME="${SKIP_LIBRIME:-0}"
 
 echo "=== [1/5] 安装 Ubuntu 22.04 依赖 ==="
 apt-get update -qq
@@ -12,22 +24,31 @@ apt-get install -y -qq \
   libyaml-cpp-dev libgoogle-glog-dev libleveldb-dev libmarisa-dev libopencc-dev \
   qtbase5-dev
 
-echo "=== [2/5] 构建 CTranslate2 (静态) ==="
-cd /src/librime/plugins/librime-ai-predict
-make -f deps.mk ctranslate2
+if [ "$SKIP_LIBRIME" = "1" ] && [ -f /src/librime/build/lib/librime.so ]; then
+  echo "=== [2-3/5] 复用已有的 librime 构建产物（SKIP_LIBRIME=1）==="
+  # 容器是干净的一次性环境，得先把 librime 装进来，addon 才找得到它。
+  cmake --install /src/librime/build --prefix /usr/local >/dev/null
+else
+  echo "=== [2/5] 构建 CTranslate2 (静态) ==="
+  cd /src/librime/plugins/librime-ai-predict
+  make -f deps.mk ctranslate2
 
-echo "=== [3/5] 构建 librime 1.16.1 + 插件 ==="
-cd /src/librime
-rm -rf build
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
-  -DBUILD_SHARED_LIBS=ON -DBUILD_MERGED_PLUGINS=OFF -DENABLE_EXTERNAL_PLUGINS=ON \
-  -DBUILD_TEST=OFF -DBUILD_SAMPLE=OFF
-ninja -C build -j "$(nproc)"
-cmake --install build
+  echo "=== [3/5] 构建 librime 1.16.1 + 插件 ==="
+  cd /src/librime
+  rm -rf build
+  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DBUILD_SHARED_LIBS=ON -DBUILD_MERGED_PLUGINS=OFF -DENABLE_EXTERNAL_PLUGINS=ON \
+    -DBUILD_TEST=OFF -DBUILD_SAMPLE=OFF
+  ninja -C build -j "$(nproc)"
+  cmake --install build
+fi
 
-echo "=== [4/5] 构建 fcitx5-rime 5.0.11 (移植版) ==="
-cd /src/fcitx5-rime-5.0.11
-sed -i 's/^fcitx5_install_translation/# disabled: gettext 0.21 .mo.rule bug/' po/CMakeLists.txt
+echo "=== [4/5] 构建 fcitx5-rime 5.0.11 (私有移植版) ==="
+cd /priv
+# gettext 0.21 的 .mo.rule bug：22.04 上必须停掉翻译安装（幂等）
+if grep -q '^fcitx5_install_translation' po/CMakeLists.txt; then
+  sed -i 's/^fcitx5_install_translation/# disabled: gettext 0.21 .mo.rule bug/' po/CMakeLists.txt
+fi
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 rm -rf build
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -35,12 +56,11 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
 ninja -C build -j "$(nproc)"
 
 echo "=== [5/5] 构建 config-ui (Qt5) ==="
-cd /src/config-ui
-rm -rf build
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
-ninja -C build -j "$(nproc)"
+rm -rf /priv/config-ui/build
+cmake -S /priv/config-ui -B /priv/config-ui/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX=/usr
+ninja -C /priv/config-ui/build -j "$(nproc)"
 
 echo "=== 构建完成, 产物 ==="
-find /src/fcitx5-rime-5.0.11/build -name "rime.so"
-find /src/librime/build -name "librime-ai-predict.so" -o -name "librime.so.1.16.1"
-ls -l /src/config-ui/build/fcitx5-rime-config
+find /priv/build -name "rime.so"
+ls -l /priv/config-ui/build/fcitx5-rime-config

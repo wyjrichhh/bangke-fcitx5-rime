@@ -6,7 +6,7 @@ set -euo pipefail
 IM_NAME="${IM_NAME:-蚌壳拼音}"
 STAGE="$HOME/bangke/openSource/stage-final"
 PRIVLIB="/usr/lib/fcitx5-rime-ai"
-VERSION="5.0.11"
+VERSION="5.0.12"
 ARCH="amd64"
 PKG="fcitx5-rime-ai-predict"
 
@@ -41,6 +41,19 @@ cp -a "$HOME/bangke/openSource/deb-resources/predict_models/zh-base-ct2-int8" "$
 cp -a "$HOME/bangke/openSource/deb-resources/ai-predict-defaults/." "$D/seed/"
 rm -f "$D/seed/squirrel.custom.yaml"
 cp -a "$HOME/bangke/openSource/deb-resources/rime-ice" "$D/seed/rime-ice"
+
+# 3.1) 候选面板配色数据（21 套配色 + 全局外观，与 mac/Windows 同键名）。
+# 少了它面板就完全没有品牌外观，所以缺文件直接失败，不要静默出包。
+BANGKE_YAML=""
+for cand in "$HOME/bangke/openSource/fcitx5-rime-5.0.11/data/bangke.yaml" \
+            "$HOME/bangke/openSource/fcitx5-rime/data/bangke.yaml"; do
+  [ -f "$cand" ] && BANGKE_YAML="$cand" && break
+done
+if [ -z "$BANGKE_YAML" ]; then
+  echo "!! 找不到 data/bangke.yaml（配色真源），先同步源码再打包" >&2
+  exit 1
+fi
+cp -a "$BANGKE_YAML" "$D/seed/bangke.yaml"
 
 # 4) ld.so.conf → 私有目录
 mkdir -p "$STAGE/etc/ld.so.conf.d"
@@ -82,9 +95,52 @@ fc-cache -f >/dev/null 2>&1 || true
 gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
 SEED=/usr/share/fcitx5-rime/seed
 R=".local/share/fcitx5/rime"
-seed() { h="$1"; [ -d "$h" ] || return 0; t="$h/$R"; mkdir -p "$t"; cp -a "$SEED"/. "$t"/; chown -R "$(stat -c '%U:%G' "$h")" "$t" 2>/dev/null || true; }
+# 只补用户没有的文件（-n）：升级时不能把用户已有的 *.custom.yaml（AI 设置、
+# 开关默认值、自定义方案）用出厂值覆盖掉 —— 与 mac 侧的 soft-write 一致。
+seed() { h="$1"; [ -d "$h" ] || return 0; t="$h/$R"; mkdir -p "$t"; cp -an "$SEED"/. "$t"/; chown -R "$(stat -c '%U:%G' "$h")" "$t" 2>/dev/null || true; }
+# 顺手把候选面板主题生成出来，用户不必先打开设置程序才有品牌外观。
+gen_theme() {
+  h="$1"; [ -d "$h" ] || return 0
+  HOME="$h" fcitx5-rime-config --generate-theme >/dev/null 2>&1 || return 0
+  chown -R "$(stat -c '%U:%G' "$h")" \
+      "$h/.local/share/fcitx5/themes" "$h/.config/fcitx5" 2>/dev/null || true
+}
+# 把 rime 注册进 fcitx5 的输入法列表。装完包 addon 只是"可用"，用户还得自己把它
+# 加进输入法组才会出现 —— 普通用户不会做这一步。幂等，且不动用户已有顺序。
+# 注意必须插在 [GroupOrder] 之前：profile 是分节 INI，追加到末尾会落进那节里，等于没注册。
+register_im() {
+  h="$1"; [ -d "$h" ] || return 0
+  p="$h/.config/fcitx5/profile"
+  if [ -f "$p" ] && grep -q '^Name=rime$' "$p"; then return 0; fi
+  mkdir -p "$h/.config/fcitx5"
+  if [ ! -f "$p" ]; then
+    printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=rime\n\n[Groups/0/Items/0]\nName=rime\nLayout=\n\n[GroupOrder]\n0=Default\n' > "$p"
+  else
+    n=$(grep -c '^\[Groups/0/Items/' "$p" 2>/dev/null || echo 0)
+    item=$(printf '[Groups/0/Items/%s]\nName=rime\nLayout=\n' "$n")
+    if grep -q '^\[GroupOrder\]' "$p"; then
+      # 逐行重写、插在 [GroupOrder] 之前。
+      # 不能用 awk -v：带换行的值会报 "newline in string"（实测踩过）。
+      tmp="$p.new"; : > "$tmp"
+      while IFS= read -r line || [ -n "$line" ]; do
+        if [ "$line" = "[GroupOrder]" ]; then
+          printf '%s\n\n' "$item" >> "$tmp"
+        fi
+        printf '%s\n' "$line" >> "$tmp"
+      done < "$p"
+      mv "$tmp" "$p"
+    else
+      printf '%s\n' "$item" >> "$p"
+    fi
+  fi
+  chown "$(stat -c '%U:%G' "$h")" "$p" 2>/dev/null || true
+}
 seed /etc/skel
+gen_theme /etc/skel
+register_im /etc/skel
 [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && seed "$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+[ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && gen_theme "$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+[ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && register_im "$(getent passwd "$SUDO_USER" | cut -d: -f6)"
 exit 0
 EOF
 chmod 0755 "$STAGE/DEBIAN/postinst"
