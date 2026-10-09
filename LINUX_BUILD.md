@@ -137,7 +137,7 @@ SSHPASS="$(cat ~/.bangke-sshpass)" ./release.sh ~/dev/bangke/bangke-dist/蚌壳�
 
 - 密码在 `~/.bangke-sshpass`（600）；服务器 `root@182.151.24.30:/srv/bangke-site/downloads`
 - `release.sh` 六步：校验 → 放包 → 重算清单（**新包必须被 `gen-releases.mjs` 的正则收录，否则官网卡片会静默显示「即将推出」**）→ 归档旧包 → 上传 → 回读 sha256。上传成功之前任何一步失败都会回滚本地改动、服务器不受影响
-- 官网仓库 `~/dev/bangke/bangke-site` **没有任何 git 兜底**（本机和 17 上都不是 git 仓库），改动只在这台机器的磁盘上
+- 官网源码只在**这台 Mac**（`~/dev/bangke/bangke-site`），而且**不在任何 git 仓库里** —— 改动只躺在这台机器的磁盘上，没有版本控制兜底。构建机 17 上没有站点源码，服务器上只有镜像 + `downloads/`
 
 清单 `downloads/releases.json` 是唯一事实来源：前端用它覆盖 `content.ts` 的兜底值，**换包不用重编前端**，卡片最多 5 分钟刷新。已知坑：本机代理会让 `curl` 服务器拿到**假 502**（要 `--noproxy '*'`）；线上域名仓库里没记录，HTTP 层验不了，只能靠 `release.sh` 第 6 步的文件系统回读。
 
