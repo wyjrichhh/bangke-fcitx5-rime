@@ -228,12 +228,12 @@ void RimeState::updatePreedit(InputContext *ic, const RimeContext &context) {
 }
 
 void RimeState::updateUI(InputContext *ic, bool keyRelease,
-                         bool clearReservedComments) {
+                         bool clearReservedComments, bool resetPanel) {
     if (clearReservedComments) {
         clearReservedCommentIndices();
     }
     auto &inputPanel = ic->inputPanel();
-    if (!keyRelease) {
+    if (!keyRelease && resetPanel) {
         inputPanel.reset();
     }
     bool oldEmptyExceptAux = emptyExceptAux(inputPanel);

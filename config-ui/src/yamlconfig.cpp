@@ -9,6 +9,11 @@
 
 #include <string.h>
 
+#include "theme/inifile.h"
+#include "theme/stylepatch.h"
+#include "theme/paths.h"
+#include "theme/scheme.h"
+
 namespace {
 
 // 只有两个方案接好了 ai_predict 的 translator/filter 链，AI 配置只写它们。
@@ -314,67 +319,7 @@ QString YamlConfig::brandName() {
 }
 
 namespace {
-// fcitx5 classic UI 的候选词排列存 INI（classicui.conf），不是 rime YAML。
-QString classicUiConfPath() {
-  QString cfgHome =
-      QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
-  if (cfgHome.isEmpty()) cfgHome = QDir::homePath() + "/.config";
-  return cfgHome + "/fcitx5/conf/classicui.conf";
-}
-constexpr const char* kVerticalKey = "Vertical Candidate List";
-
-// fcitx5 的 INI 配置（conf/*.conf）顶层键值更新（无则追加）。
-void setIniValue(const QString& path, const QString& key, const QString& value) {
-  QDir().mkpath(QFileInfo(path).dir().absolutePath());
-  QStringList lines = readLines(path);
-  const QString newLine = key + "=" + value;
-  for (int i = 0; i < lines.size(); ++i) {
-    if (lines[i].startsWith(key + "=") || lines[i] == key) {
-      lines[i] = newLine;
-      writeLines(path, lines);
-      return;
-    }
-  }
-  lines << newLine;
-  writeLines(path, lines);
-}
-
-// 读 INI 顶层 bool（无键返回 fallback）。
-bool readIniBool(const QString& path, const QString& key, bool fallback) {
-  const QStringList lines = readLines(path);
-  for (const QString& l : lines) {
-    if (l.startsWith(key + "=")) {
-      const QString v = l.mid(key.size() + 1).trimmed();
-      if (v.compare("True", Qt::CaseInsensitive) == 0) return true;
-      if (v.compare("False", Qt::CaseInsensitive) == 0) return false;
-    }
-  }
-  return fallback;
-}
-
-// classicui.conf 顶层键值更新（无则追加）。
-void setClassicUiKey(const QString& key, const QString& value) {
-  setIniValue(classicUiConfPath(), key, value);
-}
-
-bool readVerticalCandidates() {
-  const QStringList lines = readLines(classicUiConfPath());
-  for (const QString& l : lines) {
-    if (l.startsWith(QLatin1String(kVerticalKey))) {
-      const QString v = l.mid(int(strlen(kVerticalKey)));
-      return v.contains("True", Qt::CaseInsensitive);
-    }
-  }
-  return false;  // fcitx5 默认横向
-}
-
-void writeVerticalCandidates(bool vertical) {
-  setClassicUiKey(QString::fromUtf8(kVerticalKey), vertical ? "True" : "False");
-}
-
-// ── 自定义主题（候选框颜色/字体）──────────────────────────────
-constexpr const char* kThemeName = "BangKe";
-
+// rime addon 自己的配置（「在应用内显示拼音预编辑」在那里）。
 QString rimeAddonConfPath() {
   QString cfgHome =
       QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
@@ -382,116 +327,16 @@ QString rimeAddonConfPath() {
   return cfgHome + "/fcitx5/conf/rime.conf";
 }
 
-QString themeConfPath() {
-  QString dataHome =
-      QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-  if (dataHome.isEmpty()) dataHome = QDir::homePath() + "/.local/share";
-  return dataHome + "/fcitx5/themes/" + kThemeName + "/theme.conf";
+bool readIniBool(const QString& path, const QString& key, bool fallback) {
+  const QString value = bangke::ini::readValue(path, key);
+  if (value.isEmpty()) return fallback;
+  return value.compare("True", Qt::CaseInsensitive) == 0;
 }
 
-// 读 theme.conf 里 section/key 的值（section 形如 "InputPanel/Background"）。
-QString readThemeValue(const QStringList& lines, const QString& section,
-                       const QString& key) {
-  const QString header = "[" + section + "]";
-  bool inSection = false;
-  for (const QString& l : lines) {
-    const QString t = l.trimmed();
-    if (t.startsWith('[')) {
-      inSection = (t == header);
-      continue;
-    }
-    if (!inSection || !t.startsWith(key + "=")) continue;
-    return t.mid(key.size() + 1).trimmed();
-  }
-  return QString();
-}
-
-AppearanceSettings readAppearance() {
-  AppearanceSettings a;
-  const QStringList lines = readLines(themeConfPath());
-  if (lines.isEmpty()) return a;
-  QString v = readThemeValue(lines, "InputPanel", "Font");
-  if (!v.isEmpty()) {
-    const int sp = v.lastIndexOf(' ');
-    bool isNum = false;
-    if (sp > 0) {
-      const int size = v.mid(sp + 1).toInt(&isNum);
-      if (isNum && size > 0) {
-        a.fontSize = size;
-        a.fontFamily = v.left(sp);
-      }
-    }
-    if (!isNum) a.fontFamily = v;
-  }
-  v = readThemeValue(lines, "InputPanel", "NormalColor");
-  if (v.startsWith('#')) a.normalColor = v;
-  v = readThemeValue(lines, "InputPanel", "HighlightColor");
-  if (v.startsWith('#')) a.highlightTextColor = v;
-  v = readThemeValue(lines, "InputPanel/Background", "Color");
-  if (v.startsWith('#')) a.backgroundColor = v;
-  v = readThemeValue(lines, "InputPanel/Highlight", "Color");
-  if (v.startsWith('#')) a.highlightBackgroundColor = v;
-  return a;
-}
-
-void writeAppearance(const AppearanceSettings& a) {
-  const QString path = themeConfPath();
-  QDir().mkpath(QFileInfo(path).dir().absolutePath());
-  // 该主题文件由本 UI 独占，整体重写。
-  const QStringList lines = {
-      "[Metadata]",
-      "Name=" + QString::fromUtf8(kThemeName),
-      "Name[zh_CN]=自定义",
-      "Version=1",
-      "ScaleWithDPI=True",
-      "",
-      "[InputPanel]",
-      "Font=" + a.fontFamily + " " + QString::number(a.fontSize),
-      "NormalColor=" + a.normalColor,
-      "HighlightColor=" + a.highlightTextColor,
-      "PageButtonAlignment=Last Candidate",
-      "",
-      "[InputPanel/TextMargin]",
-      "Left=5", "Right=5", "Top=5", "Bottom=5",
-      "",
-      "[InputPanel/ContentMargin]",
-      "Left=2", "Right=2", "Top=2", "Bottom=2",
-      "",
-      "[InputPanel/Background]",
-      "Image=",
-      "Color=" + a.backgroundColor,
-      "BorderColor=#c0c0c0",
-      "BorderWidth=2",
-      "",
-      "[InputPanel/Background/Margin]",
-      "Left=2", "Right=2", "Top=2", "Bottom=2",
-      "",
-      "[InputPanel/Highlight]",
-      "Image=",
-      "Color=" + a.highlightBackgroundColor,
-      "",
-      "[InputPanel/Highlight/Margin]",
-      "Left=5", "Right=5", "Top=5", "Bottom=5",
-      "",
-      "[Menu]",
-      "NormalColor=" + a.normalColor,
-      "HighlightColor=" + a.highlightTextColor,
-      "",
-      "[Menu/Background]",
-      "Image=",
-      "Color=" + a.backgroundColor,
-      "BorderColor=#c0c0c0",
-      "BorderWidth=1",
-      "",
-      "[Menu/Highlight]",
-      "Image=",
-      "Color=" + a.highlightBackgroundColor,
-  };
-  writeLines(path, lines);
-  setClassicUiKey("Theme", QString::fromUtf8(kThemeName));
-  // 候选窗字体实际取 classicui.conf 的 Font（inputwindow.cpp 用 pango 解析），
-  // 主题里的 Font 是遗留字段，这里两处都写保持一致。
-  setClassicUiKey("Font", a.fontFamily + " " + QString::number(a.fontSize));
+bangke::StyleOptions readStyle() {
+  return bangke::BangkeConfig::load(bangke::paths::sharedBangkeYaml(),
+                                   bangke::paths::customBangkeYaml())
+      .style();
 }
 }  // namespace
 
@@ -503,8 +348,7 @@ RimeData YamlConfig::load() {
   bool ok = false;
   int ps = readScalar(def, "menu/page_size").toInt(&ok);
   if (ok && ps > 0) data.pageSize = ps;
-  data.verticalCandidates = readVerticalCandidates();
-  data.appearance = readAppearance();
+  data.style = readStyle();
 
   const QStringList active = readSchemaList(def);
 
@@ -578,10 +422,14 @@ bool YamlConfig::save(const RimeData& data) {
   setScalar(def, "menu/page_size", QString::number(data.pageSize));
   setScalar(def, "ascii_composer/switch_key/Shift_L", data.shiftLAction);
   setScalar(def, "ascii_composer/switch_key/Shift_R", data.shiftRAction);
-  setIniValue(rimeAddonConfPath(), "PreeditInApplication",
-              data.preeditInApp ? "True" : "False");
-  writeVerticalCandidates(data.verticalCandidates);
-  writeAppearance(data.appearance);
+  if (!bangke::ini::setValue(rimeAddonConfPath(), QStringLiteral("PreeditInApplication"),
+                     data.preeditInApp ? QStringLiteral("True")
+                                       : QStringLiteral("False")))
+    return false;
+  bangke::writeStylePatch(
+      data.style,
+      bangke::BangkeConfig::load(bangke::paths::sharedBangkeYaml(), QString())
+          .style());
   // 保持 schema_list 原有顺序，追加新勾选的；未勾选的移除。
   QStringList enabled;
   for (const QString& a : readSchemaList(def)) {

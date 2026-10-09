@@ -7,3 +7,6 @@ build/*
 *.orig
 tags
 astyle.sh
+
+# config-ui 的本地构建目录（build/* 只锚定仓库根，这里要单独写）
+config-ui/build/

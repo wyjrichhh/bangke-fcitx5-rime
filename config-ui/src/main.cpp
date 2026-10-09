@@ -2,23 +2,121 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QString>
+#include <QStringList>
+#include <QTextStream>
 #include <QTimer>
 
+#include "fcitxprofile.h"
 #include "mainwindow.h"
+#include "theme/migrate.h"
+#include "theme/paths.h"
+#include "ui/themepalette.h"
+#include "theme/scheme.h"
+#include "theme/themewriter.h"
+#include "ui/preview.h"
 
 namespace {
-const char* kStyleSheet = R"(
-QGroupBox { font-weight: bold; margin-top: 20px; }
-QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; }
-QPushButton { padding: 6px 16px; }
-)";
 constexpr const char* kInstanceKey = "fcitx5-rime-config-instance";
+
+QTextStream& out() {
+  static QTextStream stream(stdout);
+  return stream;
+}
+
+// 命令行入口：装包的 postinst 与验收脚本用它生成主题，不需要开窗口。
+int runGenerateTheme(const QString& outRoot) {
+  const QString error = bangke::ensureSharedConfig();
+  if (!error.isEmpty()) {
+    out() << error << Qt::endl;
+    return 1;
+  }
+  bangke::migrateLegacyAppearance(bangke::BangkeConfig::load(
+      bangke::paths::sharedBangkeYaml(), QString()));
+  // 兜底：确保「蚌壳拼音」在用户的输入法列表里（postinst 装包时也做过一次）。
+  ensureRimeInputMethod();
+  const bangke::BangkeConfig config = bangke::BangkeConfig::load(
+      bangke::paths::sharedBangkeYaml(), bangke::paths::customBangkeYaml());
+  const bangke::ThemeResult result =
+      bangke::applyTheme(config, config.style(), outRoot.isEmpty(), outRoot);
+  if (!result.ok) {
+    out() << result.message << Qt::endl;
+    return 1;
+  }
+  for (const QString& file : result.files) out() << file << Qt::endl;
+  return 0;
+}
+
+// 把整窗渲染成 PNG（离屏，不进真实合成器）。用于与 mac 的设置窗口并排比对。
+int runDumpUi(const QString& spec) {
+  const QStringList parts = spec.split(QLatin1Char(','));
+  const QString path = parts.value(0);
+  bangke::ensureSharedConfig();
+  MainWindow window;
+  window.resize(760, 680);
+  if (parts.size() > 1) window.setPage(parts.at(1).toInt());
+  window.show();
+  QCoreApplication::processEvents();
+  if (!window.grab().save(path, "PNG")) {
+    out() << QStringLiteral("窗口渲染失败：%1").arg(path) << Qt::endl;
+    return 1;
+  }
+  out() << path << Qt::endl;
+  return 0;
+}
+
+// 把预览条渲染成 PNG。视觉验收（与 mac 截图、与真机截图并排比对）靠它，
+// 不需要真的开窗口。
+int runDumpPreview(const QString& path) {
+  const QString error = bangke::ensureSharedConfig();
+  if (!error.isEmpty()) {
+    out() << error << Qt::endl;
+    return 1;
+  }
+  const bangke::BangkeConfig config = bangke::BangkeConfig::load(
+      bangke::paths::sharedBangkeYaml(), bangke::paths::customBangkeYaml());
+  bangke::PreviewStrip strip;
+  strip.setSpecs(bangke::panelSpecFor(config, false),
+                 bangke::panelSpecFor(config, true));
+  strip.resize(720, 280);
+  if (!strip.grab().save(path, "PNG")) {
+    out() << QStringLiteral("预览渲染失败：%1").arg(path) << Qt::endl;
+    return 1;
+  }
+  out() << path << Qt::endl;
+  return 0;
+}
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  // 无显示环境下也能生成主题（验收脚本、容器里都用得上）。
+  bool generateTheme = false;
+  QString outRoot;
+  QString previewPath;
+  QString uiPath;
+  for (int i = 1; i < argc; ++i) {
+    const QString arg = QString::fromLocal8Bit(argv[i]);
+    if (arg == QLatin1String("--generate-theme")) {
+      generateTheme = true;
+    } else if (arg.startsWith(QLatin1String("--generate-theme="))) {
+      generateTheme = true;
+      outRoot = arg.mid(int(strlen("--generate-theme=")));
+    } else if (arg.startsWith(QLatin1String("--dump-preview="))) {
+      previewPath = arg.mid(int(strlen("--dump-preview=")));
+    } else if (arg.startsWith(QLatin1String("--dump-ui="))) {
+      uiPath = arg.mid(int(strlen("--dump-ui=")));
+    }
+  }
+  const bool headless = generateTheme || !previewPath.isEmpty() || !uiPath.isEmpty();
+  if (headless) qputenv("QT_QPA_PLATFORM", "offscreen");
+
   QApplication app(argc, argv);
   app.setApplicationName(QStringLiteral("fcitx5-rime-config"));
-  app.setStyleSheet(QString::fromUtf8(kStyleSheet));
+  bangke::palette::init();  // 深浅色只判一次，QSS 与自绘控件共用
+  app.setStyleSheet(bangke::palette::styleSheet(nullptr));
+
+  if (!uiPath.isEmpty()) return runDumpUi(uiPath);
+  if (!previewPath.isEmpty()) return runDumpPreview(previewPath);
+  if (generateTheme) return runGenerateTheme(outRoot);
 
   // 单实例：已在运行则唤醒已有窗口并退出。
   {
@@ -31,6 +129,11 @@ int main(int argc, char* argv[]) {
       return 0;
     }
   }
+  bangke::migrateLegacyAppearance(bangke::BangkeConfig::load(
+      bangke::paths::sharedBangkeYaml(), QString()));
+  // 兜底：确保「蚌壳拼音」在用户的输入法列表里（postinst 装包时也做过一次）。
+  ensureRimeInputMethod();
+
   QLocalServer server;
   QLocalServer::removeServer(QString::fromLatin1(kInstanceKey));
   server.listen(QString::fromLatin1(kInstanceKey));

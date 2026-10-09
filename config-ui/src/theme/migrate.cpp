@@ -1,0 +1,163 @@
+#include "migrate.h"
+
+#include <QDir>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
+
+#include "color.h"
+#include "inifile.h"
+#include "paths.h"
+#include "stylepatch.h"
+#include "themewriter.h"
+
+namespace bangke {
+namespace {
+
+constexpr const char* kCustomSchemeId = "bangke_custom";
+
+QStringList readLines(const QString& path) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
+  QTextStream stream(&file);
+  stream.setCodec("UTF-8");
+  QStringList out;
+  while (!stream.atEnd()) out << stream.readLine();
+  return out;
+}
+
+// theme.conf 是分节 INI，取 section/key（section 形如 "InputPanel/Background"）。
+QString themeValue(const QStringList& lines, const QString& section,
+                   const QString& key) {
+  const QString header = QLatin1Char('[') + section + QLatin1Char(']');
+  bool inSection = false;
+  for (const QString& line : lines) {
+    const QString trimmed = line.trimmed();
+    if (trimmed.startsWith(QLatin1Char('['))) {
+      inSection = (trimmed == header);
+      continue;
+    }
+    if (!inSection || !trimmed.startsWith(key + QLatin1Char('='))) continue;
+    return trimmed.mid(key.size() + 1).trimmed();
+  }
+  return QString();
+}
+
+// 只比 RGB：旧主题写的是 6 位（无 alpha），方案里很多颜色带 alpha。
+bool sameRgb(const QColor& a, const QString& spec) {
+  const QColor b = parseRimeColor(spec);
+  if (!a.isValid() || !b.isValid()) return false;
+  return a.red() == b.red() && a.green() == b.green() && a.blue() == b.blue();
+}
+
+// 找与旧主题四色匹配的内置方案；找不到返回空。
+QString matchBuiltinScheme(const BangkeConfig& factory, const QString& back,
+                           const QString& normal, const QString& hlBack) {
+  for (const QString& id : factory.schemeIds()) {
+    const SchemeColors colors = factory.resolve(id, false);
+    if (sameRgb(colors.back, back) && sameRgb(colors.candidateText, normal) &&
+        sameRgb(colors.hilitedCandidateBack, hlBack)) {
+      return id;
+    }
+  }
+  return QString();
+}
+
+}  // namespace
+
+bool migrateLegacyAppearance(const BangkeConfig& config) {
+  const StyleOptions& factory = config.style();
+  const QString custom = paths::customBangkeYaml();
+  // 已经有外观键（新版写过或迁移过）就不再动。
+  if (readLines(custom).join(QLatin1Char('\n')).contains(QLatin1String("style/")))
+    return false;
+
+  const QString themeConf =
+      paths::themeDir(QStringLiteral("BangKe")) + QStringLiteral("/theme.conf");
+  const QStringList theme = readLines(themeConf);
+  if (theme.isEmpty()) return false;  // 旧版设置程序没跑过，无可认领
+
+  const QString back = themeValue(theme, QStringLiteral("InputPanel/Background"),
+                                  QStringLiteral("Color"));
+  const QString hlBack = themeValue(theme, QStringLiteral("InputPanel/Highlight"),
+                                    QStringLiteral("Color"));
+  const QString normal =
+      themeValue(theme, QStringLiteral("InputPanel"), QStringLiteral("NormalColor"));
+  if (back.isEmpty() && normal.isEmpty()) return false;
+
+  StyleOptions style = factory;
+
+  // 字体与候选排列在 classicui.conf 里
+  const QString conf = paths::classicUiConf();
+  const QString font = ini::readValue(conf, QStringLiteral("Font"));
+  if (!font.isEmpty()) {
+    const int space = font.lastIndexOf(QLatin1Char(' '));
+    bool ok = false;
+    const int size = space > 0 ? font.mid(space + 1).toInt(&ok) : 0;
+    if (ok && size > 0) {
+      style.fontFace = font.left(space);
+      style.fontPoint = size;
+    } else {
+      style.fontFace = font;
+    }
+  }
+  const QString vertical = ini::readValue(conf, QStringLiteral("Vertical Candidate List"));
+  if (!vertical.isEmpty()) {
+    style.textOrientation = vertical.contains(QLatin1String("True"),
+                                              Qt::CaseInsensitive)
+                                ? QStringLiteral("vertical")
+                                : QStringLiteral("horizontal");
+  }
+
+  // 配色：能对上内置方案就用内置的，否则把旧四色留成一个自定义方案 ——
+  // 不静默换掉用户已经调好的颜色。
+  const QString matched = matchBuiltinScheme(config, back, normal, hlBack);
+  if (!matched.isEmpty()) {
+    style.colorScheme = matched;
+  } else {
+    // 高亮候选的文字色：优先新键，其次旧版 UI 写下的 HighlightColor
+    // （旧界面上那一项叫「高亮文字颜色」），最后按高亮底色的感知亮度取黑/白。
+    QString hlText =
+        themeValue(theme, QStringLiteral("InputPanel"),
+                   QStringLiteral("HighlightCandidateColor"));
+    if (hlText.isEmpty())
+      hlText = themeValue(theme, QStringLiteral("InputPanel"),
+                          QStringLiteral("HighlightColor"));
+    const QColor hlBackColor = parseRimeColor(hlBack);
+    const int luminance =
+        hlBackColor.isValid()
+            ? (299 * hlBackColor.red() + 587 * hlBackColor.green() +
+               114 * hlBackColor.blue()) / 1000
+            : 255;
+    const QColor fallbackText(luminance < 140 ? 0xFF : 0x00,
+                              luminance < 140 ? 0xFF : 0x00,
+                              luminance < 140 ? 0xFF : 0x00);
+    // 统一成 Rime 的 0xBBGGRR 形态：与 bangke.yaml 其余 21 套一致，
+    // 也避开配置文件里以 '#' 开头的值。
+    const auto rime = [](const QString& css, const QString& fallback) {
+      const QColor color = parseRimeColor(css);
+      return color.isValid() ? toRimeColor(color)
+                             : fallback;  // 认不出来就留原样
+    };
+    writeCustomScheme(kCustomSchemeId, QStringLiteral("自定义"),
+                      {
+                          {QStringLiteral("back_color"),
+                           rime(back, QString())},
+                          {QStringLiteral("text_color"),
+                           rime(normal, QString())},
+                          {QStringLiteral("candidate_text_color"),
+                           rime(normal, QString())},
+                          {QStringLiteral("hilited_candidate_back_color"),
+                           rime(hlBack, QString())},
+                          {QStringLiteral("hilited_candidate_text_color"),
+                           hlText.isEmpty() ? toRimeColor(fallbackText)
+                                            : rime(hlText, QString())},
+                      });
+    style.colorScheme = QString::fromLatin1(kCustomSchemeId);
+  }
+
+  writeStylePatch(style, factory);
+  return true;
+}
+
+}  // namespace bangke

@@ -4,6 +4,8 @@
 #include <QList>
 #include <QString>
 
+#include "theme/scheme.h"
+
 // AI 预测的可配置项（对应 rime 配置里 ai_predict: 块下的键）。
 struct AISettings {
   bool enabled = true;
@@ -28,23 +30,10 @@ struct SchemaSettings {
   bool userDict = true;
 };
 
-// 候选框外观（写入自定义主题 ~/.local/share/fcitx5/themes/BangKe/theme.conf，
-// classicui.conf 的 Theme 指向它）。
-struct AppearanceSettings {
-  QString fontFamily = QStringLiteral("Sans");
-  int fontSize = 10;
-  QString normalColor = QStringLiteral("#000000");       // 候选文字
-  QString highlightTextColor = QStringLiteral("#ffffff");  // 高亮候选文字
-  QString backgroundColor = QStringLiteral("#ffffff");     // 面板背景
-  QString highlightBackgroundColor = QStringLiteral("#808080");  // 高亮条背景
-};
-
 // 各配置文件里、本 UI 管理的那部分设置的合并视图。
 struct RimeData {
   QList<SchemaSettings> schemas;
   int pageSize = 5;
-  // fcitx5 classic UI 的候选词排列（classicui.conf 的 Vertical Candidate List）。
-  bool verticalCandidates = false;
   // 中英切换键行为（default.custom.yaml 的 ascii_composer/switch_key/）。
   // 值：commit_code / commit_text / inline_ascii / clear / noop。
   QString shiftLAction = QStringLiteral("commit_code");
@@ -54,7 +43,9 @@ struct RimeData {
   bool preeditInApp = true;
   // 候选词后的 [拼音] 注释（schema 的 translator/spelling_hints）。
   bool spellingHints = true;
-  AppearanceSettings appearance;
+  // 候选面板外观。存在 rime 用户配置的 bangke.yaml / bangke.custom.yaml 里，
+  // 与 mac/Windows 同键名；classicui 主题是它的派生物。
+  bangke::StyleOptions style;
   AISettings ai;
 };
 

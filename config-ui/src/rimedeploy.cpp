@@ -5,6 +5,37 @@
 #include <QDBusInterface>
 #include <QDBusMessage>
 
+QString RimeDeploy::setAddonConfig(const QString& addon, const QVariantMap& values) {
+  QDBusInterface controller(QStringLiteral("org.fcitx.Fcitx5"),
+                            QStringLiteral("/controller"),
+                            QStringLiteral("org.fcitx.Fcitx.Controller1"),
+                            QDBusConnection::sessionBus());
+  if (!controller.isValid()) {
+    return QStringLiteral("未检测到运行中的 fcitx5（配置已保存，重启输入法后生效）。");
+  }
+  // fcitx5 的配置 DBus 里所有标量都是**字符串**：GetConfig 吐出来就是
+  // <'PreeditInApplication': <'True'>>。塞 bool/int 会被 variantToRawConfig
+  // 忽略 —— 表现为「SetConfig 返回成功，但值没变」（实测踩过：设置程序里
+  // 改开关后配置文件被 fcitx5 用旧值回写，看着像"没保存"）。
+  QVariantMap payload;
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+    const QVariant& v = it.value();
+    const QString text = (v.type() == QVariant::Bool)
+                             ? (v.toBool() ? QStringLiteral("True")
+                                           : QStringLiteral("False"))
+                             : v.toString();
+    payload.insert(it.key(), QVariant::fromValue(QDBusVariant(text)));
+  }
+  const QString uri = QStringLiteral("fcitx://config/addon/") + addon;
+  const QDBusMessage reply = controller.call(
+      QStringLiteral("SetConfig"), uri, QVariant::fromValue(QDBusVariant(payload)));
+  if (reply.type() == QDBusMessage::ErrorMessage) {
+    return QStringLiteral("配置已保存，但推送 %1 失败（%2）—— 重启输入法后生效。")
+        .arg(addon, reply.errorMessage());
+  }
+  return QString();
+}
+
 // rime addon 通过自己的 DBus 接口 org.fcitx.Fcitx.Rime1（/rime）暴露 Deploy 方法，
 // 直接调 RimeEngine::deploy() 做 fullcheck 重建（rimeservice.cpp）。失败时兜底提示。
 QString RimeDeploy::triggerDeploy() {

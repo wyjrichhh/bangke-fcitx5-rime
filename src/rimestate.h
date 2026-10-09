@@ -22,8 +22,12 @@ public:
     void keyEvent(KeyEvent &event);
     bool getStatus(RimeStatus *status);
     void updatePreedit(InputContext *ic, const RimeContext &context);
+    // resetPanel：是否先清空面板。按键驱动的刷新要清（重新算），
+    // 异步刷新（AI 插件 _refresh_ui 通知）**不能清** —— 清了之后若 get_context
+    // 失败或会话已变，函数会提前返回，面板就留在空状态（实测：拼音进面板时
+    // 整个候选窗变成「横条 + 灰块 + 空白」）。
     void updateUI(InputContext *ic, bool keyRelease,
-                  bool clearReservedComments = true);
+                  bool clearReservedComments = true, bool resetPanel = true);
     void release();
     void commitPreedit(InputContext *ic);
     std::string subMode();

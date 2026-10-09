@@ -423,8 +423,10 @@ void RimeEngine::handleReservedProperty(RimeSessionId session,
             [this, session](InputContext *ic) {
                 if (auto *state = this->state(ic)) {
                     if (state->session() == session) {
+                        // 异步刷新：不清空面板，只重拉内容（见 rimestate.h）。
                         state->updateUI(ic, /*keyRelease=*/false,
-                                        /*clearReservedComments=*/false);
+                                        /*clearReservedComments=*/false,
+                                        /*resetPanel=*/false);
                     }
                 }
                 return true;
