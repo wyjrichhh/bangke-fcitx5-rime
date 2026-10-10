@@ -120,6 +120,21 @@ cp "$DEB_SRC"/usr/share/applications/fcitx5-rime-config.desktop "$OUT/usr/share/
 cp "$PRIV/dist/install-arch-aarch64.sh"           "$OUT/"
 chmod +x "$OUT/install-arch-aarch64.sh"
 
+# 字体：deb 里带了两个中文字体，是给没有 CJK 字体的系统兜底的，别漏。
+cp -a "$DEB_SRC"/usr/share/fonts "$OUT/usr/share/" 2>/dev/null || \
+  echo "注意：$DEB_SRC 里没有 fonts/，面板字体只能靠系统兜底" >&2
+
 echo "=== 完成 ==="
 ls -l "$OUT/usr/lib/fcitx5/rime.so" "$OUT/usr/lib/fcitx5-rime-ai/rime-plugins/librime-ai-predict.so"
 du -sh "$OUT"
+
+# ---------------------------------------------------------------- 打 tar
+# **COPYFILE_DISABLE=1 不能少**：macOS 的 bsdtar 默认把扩展属性存成 AppleDouble
+# `._*` 条目，在 Linux 上解包会变成真实文件。轻则 librime 把 `._librime-ai-predict.so`
+# 当插件去加载、日志刷 "无效的 ELF 头"，重则 rime 把 `._*.yaml` 当配置解析。
+echo "=== 打包 ==="
+TAR="$PRIV/build-out/bangke-arch-aarch64.tar.zst"
+rm -f "$TAR"
+( cd "$(dirname "$OUT")" && COPYFILE_DISABLE=1 tar --zstd -cf "$TAR" "$(basename "$OUT")" )
+tar --zstd -tf "$TAR" | grep -q '/\._' && { echo "包里混进了 ._ 条目，检查 COPYFILE_DISABLE" >&2; exit 1; }
+ls -lh "$TAR"
