@@ -80,33 +80,63 @@ gen_theme() {
   chown -R "$(stat -c '%U:%G' "$h")" "$h/.local/share/fcitx5/themes" "$h/.config/fcitx5" 2>/dev/null || true
 }
 
-# 把 rime 注册进 fcitx5 的输入法列表。装完 addon 只是"可用"，还得进输入法组才会出现。
-# 必须插在 [GroupOrder] 之前：profile 是分节 INI，追加到末尾会落进那一节里，等于没注册。
+# 把 rime 注册进 fcitx5 的输入法列表，并排到**第一位**、设为默认输入法。
+#
+# 为什么不能只"追加到末尾"（deb 的 postinst 是那么做的，但那假设的是全新 Ubuntu 用户）：
+# Omarchy 预置的组里已经有 chewing（注音）。Ctrl+空格 是**按组内顺序向后枚举**的，追加到
+# 末尾等于「按一下切到 chewing」。注音符号 ㄅㄆㄇㄈ 跟日文假名极像，用户会以为装成了日文
+# 输入法，而且 chewing 打不出英文 —— 实测就是这么翻车的。
+# 所以这里重写 group 0：rime 打头，其余输入法按原序保留在它后面。
 register_im() {
   local h="$1"; [ -d "$h" ] || return 0
   local p="$h/.config/fcitx5/profile"
-  if [ -f "$p" ] && grep -q '^Name=rime$' "$p"; then return 0; fi
   mkdir -p "$h/.config/fcitx5"
-  if [ ! -f "$p" ]; then
-    printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=rime\n\n[Groups/0/Items/0]\nName=rime\nLayout=\n\n[GroupOrder]\n0=Default\n' > "$p"
-  else
-    # 组里已有几项就接在几号后面
-    local n item
-    n=$(grep -c '^\[Groups/0/Items/' "$p" 2>/dev/null || true)
-    item=$(printf '[Groups/0/Items/%s]\nName=rime\nLayout=\n' "${n:-0}")
-    if grep -q '^\[GroupOrder\]' "$p"; then
-      # 逐行重写、插在 [GroupOrder] 之前。
-      # 不能用 awk -v：带换行的值会报 "newline in string"（deb 侧实测踩过）。
-      local tmp="$p.new"; : > "$tmp"
-      while IFS= read -r line || [ -n "$line" ]; do
-        [ "$line" = "[GroupOrder]" ] && printf '%s\n\n' "$item" >> "$tmp"
-        printf '%s\n' "$line" >> "$tmp"
-      done < "$p"
-      mv "$tmp" "$p"
-    else
-      printf '%s\n\n' "$item" >> "$p"
-    fi
+
+  # 多组配置不动（重写会丢别的 group），退回"只设默认"。
+  if [ -f "$p" ] && grep -q '^\[Groups/1\]' "$p"; then
+    echo "    注意：profile 里有多个输入法组，只设默认、不改顺序" >&2
+    sed -i 's/^DefaultIM=.*/DefaultIM=rime/' "$p" 2>/dev/null || true
+    grep -q '^DefaultIM=' "$p" || sed -i 's/^\(Default Layout=.*\)$/\1\nDefaultIM=rime/' "$p"
+    chown "$(stat -c '%U:%G' "$h")" "$p" 2>/dev/null || true
+    return 0
   fi
+
+  # 收集现有输入法名（只认 [Groups/0/Items/N] 节里的 Name=），保序去重
+  local -a ims=(); local in_items=0 line name im seen
+  if [ -f "$p" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case $line in
+        \[Groups/0/Items/*) in_items=1; continue ;;
+        \[*)                in_items=0; continue ;;
+      esac
+      [ "$in_items" = 1 ] || continue
+      case $line in Name=*) ;; *) continue ;; esac
+      name=${line#Name=}
+      seen=0
+      for im in ${ims[@]+"${ims[@]}"}; do [ "$im" = "$name" ] && seen=1; done
+      [ "$seen" = 1 ] || ims+=("$name")
+    done < "$p"
+  fi
+
+  # rime 打头，其余按原序；确保至少留一个英文键盘
+  local -a out=(rime); local has_kb=0
+  for name in ${ims[@]+"${ims[@]}"}; do
+    [ "$name" = rime ] && continue
+    [ "$name" = keyboard-us ] && has_kb=1
+    out+=("$name")
+  done
+  [ "$has_kb" = 1 ] || out+=(keyboard-us)
+
+  local tmp="$p.new" i=0
+  {
+    printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=rime\n\n'
+    for name in "${out[@]}"; do
+      printf '[Groups/0/Items/%s]\nName=%s\nLayout=\n\n' "$i" "$name"
+      i=$((i + 1))
+    done
+    printf '[GroupOrder]\n0=Default\n'
+  } > "$tmp"
+  mv "$tmp" "$p"
   chown "$(stat -c '%U:%G' "$h")" "$p" 2>/dev/null || true
 }
 
