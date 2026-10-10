@@ -91,7 +91,10 @@ for conf in "$STAGE/usr/share/fcitx5/inputmethod/rime.conf" \
             "$STAGE/usr/share/fcitx5/addon/rime.conf" \
             "$STAGE/usr/local/share/fcitx5/addon/rime.conf" \
             "$STAGE/usr/share/applications/fcitx5-rime-config.desktop"; do
-  [ -f "$conf" ] && sed -i "s/^Name=.*/Name=$IM_NAME/" "$conf"
+  # 必须连本地化键一起换：fcitx5 按 locale 优先取 Name[zh_CN] 这种带后缀的键，
+  # 只改裸 Name= 的话，中文 locale 用户看到的是上游残留的「中州韻」而不是品牌名。
+  # （zh_CN/zh_TW 正好是我们的主要用户，实测在 Omarchy aarch64 上就是这样。）
+  [ -f "$conf" ] && sed -i -E "s/^Name(\[[^]]*\])?=.*/Name\1=$IM_NAME/" "$conf"
 done
 
 # 5) 内置中文字体 → /usr/share/fonts/
