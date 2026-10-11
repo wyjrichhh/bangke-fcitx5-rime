@@ -220,6 +220,19 @@ QFont resolveFont(const StyleOptions& style, QString* installedFamily) {
   return font;
 }
 
+QString classicUiFontSpec(const StyleOptions& style) {
+  const QStringList installed = QFontDatabase().families();
+  const int point = style.fontPoint > 0 ? style.fontPoint : 16;
+  QString family = style.fontFace.trimmed();
+  if (family.isEmpty() || !installed.contains(family)) {
+    family = QStringLiteral("Noto Sans CJK SC");
+  }
+  // 连兜底字体都没装 —— 宁可整项不写（fcitx5 用自己的默认），也不要写一个
+  // 空的 `Font=`：那会让面板高度归零、整个看不见。
+  if (!installed.contains(family)) return QString();
+  return QStringLiteral("%1 %2").arg(family).arg(point);
+}
+
 PanelSpec panelSpecFor(const BangkeConfig& config, bool dark) {
   return panelSpecFor(config, config.style(), dark);
 }
@@ -264,11 +277,9 @@ ThemeResult applyTheme(const BangkeConfig& config, const StyleOptions& style,
     // classicui.conf 里唯一的非默认键就是空的 Font=。
     // 来源是 pages.cpp 的 `out.fontFace = font_->family();`，字体按钮取不到家族名
     // 时返回空串。不写这一项，fcitx5 会保持它原有的字体，比写空值安全得多。
-    const QString family = style.fontFace.trimmed();
-    if (!family.isEmpty()) {
-      const int point = style.fontPoint > 0 ? style.fontPoint : 16;
-      ini::setValue(conf, QStringLiteral("Font"),
-                    QStringLiteral("%1 %2").arg(family).arg(point));
+    const QString fontSpec = classicUiFontSpec(style);
+    if (!fontSpec.isEmpty()) {
+      ini::setValue(conf, QStringLiteral("Font"), fontSpec);
     }
     ini::setValue(conf, QStringLiteral("Vertical Candidate List"),
                   boolText(style.textOrientation == QLatin1String("vertical")));

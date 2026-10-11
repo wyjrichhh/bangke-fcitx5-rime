@@ -180,11 +180,9 @@ void MainWindow::saveAndDeploy() {
   // classicui.conf 里唯一的非默认键就是空的 `Font=`。
   // 来源是字体按钮取不到家族名时返回空串（pages.cpp 从控件读 family()）。
   // 不推的话 fcitx5 保持它原有的字体，比推一个空值安全得多。
-  const QString family = data_.style.fontFace.trimmed();
-  if (!family.isEmpty()) {
-    const int point = data_.style.fontPoint > 0 ? data_.style.fontPoint : 16;
-    classicConfig.insert(QStringLiteral("Font"),
-                         QStringLiteral("%1 %2").arg(family).arg(point));
+  const QString fontSpec = bangke::classicUiFontSpec(data_.style);
+  if (!fontSpec.isEmpty()) {
+    classicConfig.insert(QStringLiteral("Font"), fontSpec);
   }
 
   const QString classicError =
