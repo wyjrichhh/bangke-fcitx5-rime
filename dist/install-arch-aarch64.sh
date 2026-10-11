@@ -18,7 +18,12 @@ die() { echo "错误：$*" >&2; exit 1; }
 
 # 运行期依赖。fcitx5 是引擎本体，qt5-base 给设置程序用，其余是 librime 直接 NEEDED 的。
 # 版本必须和构建时一致（滚动发行版里 pacman 会保证），所以不做捆绑。
-DEPS=(fcitx5 qt5-base google-glog yaml-cpp gflags leveldb marisa opencc)
+# qt5-wayland：设置程序是 Qt5 应用，Hyprland 这类 Wayland 会话下没有它就只能退回
+# XWayland，实测表现为设置页渲染/预览不正常。
+# librime-data：rime 的**基座**数据（default.yaml、essay.txt、luna_pinyin.schema.yaml、
+# 词库…）在 shared_data_dir=/usr/share/rime-data 里，用户目录只有 *.custom.yaml 补丁。
+# 漏了它方案根本加载不了、部署产出 0 个文件，表现是「只剩英文、没有候选框」。
+DEPS=(fcitx5 qt5-base qt5-wayland librime-data google-glog yaml-cpp gflags leveldb marisa opencc)
 
 echo "==> 安装依赖：${DEPS[*]}"
 pacman -S --needed --noconfirm "${DEPS[@]}"
