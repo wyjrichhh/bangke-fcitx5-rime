@@ -264,6 +264,14 @@ void MainWindow::saveAndDeploy() {
   const QString classicError =
       RimeDeploy::setAddonConfig(QStringLiteral("classicui"), classicConfig);
   saveLog(QStringLiteral("SetConfig(classicui) 返回: [%1]").arg(classicError));
+  // 回读：fcitx5 自己认为这几个键是什么。和文件里的值一比，就能分清是
+  // 「fcitx5 拒了我们的值」还是「写文件那条路另有其人」。
+  saveLog(QStringLiteral("fcitx5 回读: %1")
+              .arg(RimeDeploy::addonConfigDump(
+                  QStringLiteral("classicui"),
+                  {QStringLiteral("Theme"), QStringLiteral("DarkTheme"),
+                   QStringLiteral("UseDarkTheme"), QStringLiteral("Font"),
+                   QStringLiteral("Vertical Candidate List")})));
   if (!classicError.isEmpty()) pushErrors << classicError;
 
   saveLog(QStringLiteral("推送之后 conf（这一步最关键）: %1")

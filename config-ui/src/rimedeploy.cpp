@@ -60,3 +60,24 @@ QString RimeDeploy::triggerDeploy() {
   }
   return QString();
 }
+
+QString RimeDeploy::addonConfigDump(const QString& addon, const QStringList& keys) {
+  QDBusInterface controller(QStringLiteral("org.fcitx.Fcitx5"),
+                            QStringLiteral("/controller"),
+                            QStringLiteral("org.fcitx.Fcitx.Controller1"),
+                            QDBusConnection::sessionBus());
+  if (!controller.isValid()) return QStringLiteral("<没有 fcitx5>");
+  const QDBusMessage reply = controller.call(
+      QStringLiteral("GetConfig"),
+      QStringLiteral("fcitx://config/addon/") + addon);
+  if (reply.type() == QDBusMessage::ErrorMessage)
+    return QStringLiteral("<GetConfig 失败: %1>").arg(reply.errorMessage());
+  const QVariantMap got = qvariant_cast<QVariantMap>(reply.arguments().value(0));
+  QStringList out;
+  for (const QString& k : keys) {
+    const QString kk = k == QStringLiteral("Vertical Candidate List")
+                           ? QStringLiteral("Vertical Candidate List") : k;
+    out << QStringLiteral("%1=[%2]").arg(kk, got.value(kk).toString());
+  }
+  return out.join(QStringLiteral("  "));
+}
