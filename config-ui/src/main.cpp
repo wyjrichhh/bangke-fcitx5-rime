@@ -107,7 +107,19 @@ int main(int argc, char* argv[]) {
     }
   }
   const bool headless = generateTheme || !previewPath.isEmpty() || !uiPath.isEmpty();
-  if (headless) qputenv("QT_QPA_PLATFORM", "offscreen");
+  if (headless) {
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+  } else if (!qEnvironmentVariableIsEmpty("BK_QT_PLATFORM")) {
+    // 留个显式逃生口：想强制走某条渲染路径时设它。
+    qputenv("QT_QPA_PLATFORM", qgetenv("BK_QT_PLATFORM"));
+  } else if (!qEnvironmentVariableIsEmpty("DISPLAY")) {
+    // Qt5 的 wayland 后端在这套界面上不可靠。实测（Hyprland / Omarchy，
+    // QT_QPA_PLATFORM=wayland;xcb）候选面板的预览块整块不绘制、下拉框点不开；
+    // 而同一份程序用 --dump-ui 离屏渲染完全正常 —— 说明数据没问题，是渲染后端。
+    // 有 DISPLAY 就说明有 XWayland（Wayland 桌面上基本是标配），走 xcb 一切正常。
+    // 纯 Wayland（没有 XWayland）时 DISPLAY 为空，保持原样、仍然用 wayland。
+    qputenv("QT_QPA_PLATFORM", "xcb");
+  }
 
   QApplication app(argc, argv);
   app.setApplicationName(QStringLiteral("fcitx5-rime-config"));
