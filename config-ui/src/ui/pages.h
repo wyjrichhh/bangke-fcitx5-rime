@@ -28,6 +28,9 @@ class FontButton : public RowShell {
 
  private:
   QPushButton* button_ = nullptr;
+  // 按钮文字被清空时的兜底家族名。空家族名会让 fcitx5 解析出 0 号字、
+  // 候选面板高度归零整个看不见（真机上「保存后候选面板消失」的直接原因）。
+  QString fallback_;
 };
 
 class TextRow;

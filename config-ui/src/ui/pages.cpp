@@ -93,15 +93,27 @@ bool fcitxSupportsDarkTheme() {
 }
 
 FontButton::FontButton(const QString& family, QWidget* parent)
-    : RowShell(QStringLiteral("字体"), QString(), nullptr, parent) {
+    : RowShell(QStringLiteral("字体"), QString(), nullptr, parent), fallback_(family) {
   button_ = new QPushButton(family, this);
   button_->setMinimumWidth(220);
   if (auto* shell = qobject_cast<QHBoxLayout*>(this->layout()))
     shell->addWidget(button_);
 }
 
-QString FontButton::family() const { return button_->text(); }
-void FontButton::setFamily(const QString& family) { button_->setText(family); }
+QString FontButton::family() const {
+  const QString shown = button_->text().trimmed();
+  if (!shown.isEmpty()) return shown;
+  // 按钮文字可能被清空（比如字体选择器返回空）。空家族名会被原样写进
+  // classicui.conf 的 `Font=`，fcitx5 解析出 0 号字 —— 候选面板高度跟着文字走，
+  // 于是归零、整个看不见。这是真机上「一保存候选面板就消失」的直接原因，
+  // 所以这里必须兜底，不能把空串交出去。
+  const QString fallback = fallback_.trimmed();
+  return fallback.isEmpty() ? QStringLiteral("Noto Sans CJK SC") : fallback;
+}
+void FontButton::setFamily(const QString& family) {
+  fallback_ = family;
+  button_->setText(family);
+}
 
 // ── 外观页 ───────────────────────────────────────────────────────
 
