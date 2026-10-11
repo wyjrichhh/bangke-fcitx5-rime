@@ -1,4 +1,9 @@
 #include "mainwindow.h"
+#include <QTextStream>
+#include <QFileInfo>
+#include <QFile>
+#include <QDir>
+#include <QDateTime>
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -128,6 +133,47 @@ void MainWindow::restoreDefaults() {
   status_->setText(QStringLiteral("外观设置已恢复出厂值，点「保存并应用」生效。"));
 }
 
+// 保存过程的逐步日志。
+//
+// 为什么要有它：候选面板在真机上「一保存就消失」，而症状完全由 classicui.conf 里
+// 某个键的最终取值决定。光看结果猜是哪一步写坏的已经猜错好几轮了 —— 让它自己把
+// 中间值打出来，比外面猜准得多。写到共享目录（Mac 侧能直接读到），没有就写家目录。
+namespace {
+const char* kSaveLogName = "save-log.txt";
+
+QString saveLogPath() {
+  const QString share = QDir::homePath() + QStringLiteral("/bangke-share");
+  if (QFileInfo::exists(share)) return share + QLatin1Char('/') + kSaveLogName;
+  return QDir::homePath() + QLatin1Char('/') + kSaveLogName;
+}
+
+void saveLog(const QString& line) {
+  QFile f(saveLogPath());
+  if (!f.open(QIODevice::Append | QIODevice::Text)) return;
+  QTextStream ts(&f);
+  ts << QDateTime::currentDateTime().toString(Qt::ISODate) << "  " << line << "\n";
+}
+
+// classicui.conf 里我们关心的那几行（读不到就记 <无>）
+QString readClassicUiKeys(const QString& conf) {
+  QFile f(conf);
+  if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QStringLiteral("<读不到>");
+  const QStringList keys{QStringLiteral("Theme"), QStringLiteral("DarkTheme"),
+                         QStringLiteral("UseDarkTheme"), QStringLiteral("Font"),
+                         QStringLiteral("Vertical Candidate List")};
+  QStringList out;
+  QTextStream ts(&f);
+  while (!ts.atEnd()) {
+    const QString line = ts.readLine();
+    for (const QString& k : keys) {
+      if (line.startsWith(k + QLatin1Char('=')))
+        out << QStringLiteral("%1=[%2]").arg(k, line.mid(k.size() + 1));
+    }
+  }
+  return out.isEmpty() ? QStringLiteral("<没有这些键>") : out.join(QStringLiteral("  "));
+}
+}  // namespace
+
 void MainWindow::saveAndDeploy() {
   data_.style = appearance_->style();
   data_.preeditInApp = true;  // 见构造函数里的说明：这一项在 Linux 上固定
@@ -135,19 +181,42 @@ void MainWindow::saveAndDeploy() {
   ai_->collect(&data_);
   schemas_->collect(&data_);
 
+  saveLog(QStringLiteral("========== 保存开始 =========="));
+  saveLog(QStringLiteral("style: fontFace=[%1] fontPoint=%2 colorScheme=[%3] dark=[%4] "
+                         "orientation=[%5] corner=%6 shadow=%7 border=%8 alpha=%9")
+              .arg(data_.style.fontFace)
+              .arg(data_.style.fontPoint)
+              .arg(data_.style.colorScheme, data_.style.colorSchemeDark,
+                   data_.style.textOrientation)
+              .arg(data_.style.cornerRadius)
+              .arg(data_.style.shadowSize)
+              .arg(data_.style.borderWidth)
+              .arg(data_.style.alpha));
+  saveLog(QStringLiteral("算出的字体规格 classicUiFontSpec=[%1]")
+              .arg(bangke::classicUiFontSpec(data_.style)));
+  saveLog(QStringLiteral("保存前 conf: %1")
+              .arg(readClassicUiKeys(bangke::paths::classicUiConf())));
+
   if (!YamlConfig::save(data_)) {
+    saveLog(QStringLiteral("!! YamlConfig::save 失败"));
     QMessageBox::warning(
         this, QStringLiteral("保存失败"),
         QStringLiteral("无法写入 %1").arg(YamlConfig::rimeUserDir()));
     return;
   }
+  saveLog(QStringLiteral("YamlConfig::save 成功"));
 
   const bangke::ThemeResult theme = bangke::applyTheme(config_, data_.style);
+  saveLog(QStringLiteral("applyTheme ok=%1 msg=[%2]")
+              .arg(theme.ok ? QStringLiteral("true") : QStringLiteral("false"),
+                   theme.message));
   if (!theme.ok) {
     QMessageBox::warning(this, QStringLiteral("候选面板主题写入失败"),
                          theme.message);
     return;
   }
+  saveLog(QStringLiteral("applyTheme 之后 conf: %1")
+              .arg(readClassicUiKeys(bangke::paths::classicUiConf())));
 
   ensureRimeInputMethod();  // 万一 profile 被重置过
 
@@ -185,12 +254,27 @@ void MainWindow::saveAndDeploy() {
     classicConfig.insert(QStringLiteral("Font"), fontSpec);
   }
 
+  {
+    QStringList kv;
+    for (auto it = classicConfig.constBegin(); it != classicConfig.constEnd(); ++it)
+      kv << QStringLiteral("%1=[%2]").arg(it.key(), it.value().toString());
+    saveLog(QStringLiteral("要推给 classicui 的内容: %1").arg(kv.join(QStringLiteral("  "))));
+  }
+
   const QString classicError =
       RimeDeploy::setAddonConfig(QStringLiteral("classicui"), classicConfig);
+  saveLog(QStringLiteral("SetConfig(classicui) 返回: [%1]").arg(classicError));
   if (!classicError.isEmpty()) pushErrors << classicError;
+
+  saveLog(QStringLiteral("推送之后 conf（这一步最关键）: %1")
+              .arg(readClassicUiKeys(bangke::paths::classicUiConf())));
 
   // rime 侧配置还要走部署（编译词典/方案）。
   const QString hint = RimeDeploy::triggerDeploy();
+  saveLog(QStringLiteral("triggerDeploy 返回: [%1]").arg(hint));
+  saveLog(QStringLiteral("部署之后 conf: %1")
+              .arg(readClassicUiKeys(bangke::paths::classicUiConf())));
+  saveLog(QStringLiteral("========== 保存结束 =========="));
   if (hint.isEmpty() && pushErrors.isEmpty()) {
     status_->setText(QStringLiteral("已保存并应用。"));
     close();
