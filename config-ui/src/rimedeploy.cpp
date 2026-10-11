@@ -72,7 +72,11 @@ QString RimeDeploy::addonConfigDump(const QString& addon, const QStringList& key
       QStringLiteral("fcitx://config/addon/") + addon);
   if (reply.type() == QDBusMessage::ErrorMessage)
     return QStringLiteral("<GetConfig 失败: %1>").arg(reply.errorMessage());
-  const QVariantMap got = qvariant_cast<QVariantMap>(reply.arguments().value(0));
+  // GetConfig 的返回签名是 v（里面才是 a{sv}），必须先拆一层 QDBusVariant，
+  // 否则 qvariant_cast 直接失败、拿到空 map —— 之前日志里"五个键全空"就是这个。
+  QVariant inner = reply.arguments().value(0);
+  if (inner.canConvert<QDBusVariant>()) inner = inner.value<QDBusVariant>().variant();
+  const QVariantMap got = inner.value<QVariantMap>();
   QStringList out;
   for (const QString& k : keys) {
     const QString kk = k == QStringLiteral("Vertical Candidate List")

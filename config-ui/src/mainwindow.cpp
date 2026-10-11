@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include <QProcess>
 #include <QTextStream>
 #include <QFileInfo>
 #include <QFile>
@@ -292,6 +293,20 @@ void MainWindow::saveAndDeploy() {
   saveLog(QStringLiteral("triggerDeploy 返回: [%1]").arg(hint));
   saveLog(QStringLiteral("部署之后 conf: %1")
               .arg(readClassicUiKeys(bangke::paths::classicUiConf())));
+  // **让 fcitx5 重启一次**。
+  //
+  // 为什么必须这样：日志证明 SetConfig 之后 fcitx5 的运行时状态变成了空（它随即把
+  // classicui.conf 写成了「全是默认 + 空 Font=」），而 fcitx5 **没有文件监视器**，
+  // 只在启动时读一次 classicui.conf —— 所以光把文件写对救不了已经在跑的那个进程。
+  // 这也解释了为什么每次手动重启输入法都能恢复。
+  // `-r` 是"替换运行中的实例"：新进程会用当前会话环境起来，并读到我们刚写好的文件。
+  saveLog(QStringLiteral("重启 fcitx5 让它读回写好的配置..."));
+  if (QProcess::startDetached(QStringLiteral("fcitx5"),
+                              {QStringLiteral("-r"), QStringLiteral("-d")})) {
+    saveLog(QStringLiteral("已发出重启请求"));
+  } else {
+    saveLog(QStringLiteral("!! 重启请求发送失败，请手动跑 fcitx5 -r -d"));
+  }
   saveLog(QStringLiteral("========== 保存结束 =========="));
   if (hint.isEmpty() && pushErrors.isEmpty()) {
     status_->setText(QStringLiteral("已保存并应用。"));
