@@ -53,6 +53,14 @@ ThemeResult applyTheme(const BangkeConfig& config, const StyleOptions& style,
 // 返回错误信息，空 = 成功或无需处理。
 QString ensureSharedConfig();
 
+// 只重写 classicui.conf 里那几个键（Theme / DarkTheme / UseDarkTheme / Font /
+// Vertical Candidate List），不动主题目录。
+//
+// 为什么要单独一个入口：真机上 fcitx5 在 SetConfig 之后会把这几个键重置成默认、
+// 并把 Font 写成空的（见 save-log.txt 的时序）。所以写入必须放在**推送之后** ——
+// 否则刚写好的值会被推送冲掉。
+void writeClassicUiConf(const StyleOptions& style);
+
 }  // namespace bangke
 
 #endif  // FCITX5_RIME_CONFIG_THEME_THEMEWRITER_H_

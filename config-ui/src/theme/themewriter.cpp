@@ -304,4 +304,18 @@ QString ensureSharedConfig() {
   return QString();
 }
 
+void writeClassicUiConf(const StyleOptions& style) {
+  const QString conf = paths::classicUiConf();
+  ini::setValue(conf, QStringLiteral("Theme"), QLatin1String(kThemeName));
+  ini::setValue(conf, QStringLiteral("DarkTheme"), QLatin1String(kThemeName));
+  ini::setValue(conf, QStringLiteral("UseDarkTheme"), QStringLiteral("False"));
+  const QString fontSpec = classicUiFontSpec(style);
+  if (!fontSpec.isEmpty()) {
+    ini::setValue(conf, QStringLiteral("Font"), fontSpec);
+  }
+  ini::setValue(conf, QStringLiteral("Vertical Candidate List"),
+                boolText(style.textOrientation == QLatin1String("vertical")));
+}
+
 }  // namespace bangke
+

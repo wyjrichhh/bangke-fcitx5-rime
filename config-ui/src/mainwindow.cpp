@@ -277,6 +277,16 @@ void MainWindow::saveAndDeploy() {
   saveLog(QStringLiteral("推送之后 conf（这一步最关键）: %1")
               .arg(readClassicUiKeys(bangke::paths::classicUiConf())));
 
+  // **推送之后**再写一遍 classicui.conf。
+  //
+  // 真机日志的时序：SetConfig 返回成功，但同一秒里文件被重置成「全是默认值 +
+  // 空的 Font=」。而 applyTheme 写文件是在推送**之前** —— 写好的值被推送冲掉了。
+  // 所以这里补一次，让文件以我们的值为准。日志里同时会记下 fcitx5 自己认为的值，
+  // 用来分清是「它拒了我们的值」还是「写文件那条路另有其人」。
+  bangke::writeClassicUiConf(data_.style);
+  saveLog(QStringLiteral("补写之后 conf: %1")
+              .arg(readClassicUiKeys(bangke::paths::classicUiConf())));
+
   // rime 侧配置还要走部署（编译词典/方案）。
   const QString hint = RimeDeploy::triggerDeploy();
   saveLog(QStringLiteral("triggerDeploy 返回: [%1]").arg(hint));
