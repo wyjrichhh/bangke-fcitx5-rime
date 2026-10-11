@@ -252,10 +252,24 @@ ThemeResult applyTheme(const BangkeConfig& config, const StyleOptions& style,
   if (writeClassicUiConf && outRoot.isEmpty()) {
     const QString conf = paths::classicUiConf();
     ini::setValue(conf, QStringLiteral("Theme"), QLatin1String(kThemeName));
-    ini::setValue(conf, QStringLiteral("DarkTheme"), QLatin1String(kThemeDarkName));
-    ini::setValue(conf, QStringLiteral("UseDarkTheme"), QStringLiteral("True"));
-    ini::setValue(conf, QStringLiteral("Font"),
-                  QStringLiteral("%1 %2").arg(style.fontFace).arg(style.fontPoint));
+    // 不走「跟随系统深色」。生成器给 BangKe / BangKe-Dark 产出的内容**完全一样**
+    // （颜色逐行一致、背景图 md5 相同），这个开关本来就没起作用；而一旦置 True，
+    // fcitx5 会改走 DarkTheme 那条加载路径 —— 实测真机（Hyprland/Wayland）下
+    // 候选面板会整个画不出来。指回同一个主题没有任何损失。
+    ini::setValue(conf, QStringLiteral("DarkTheme"), QLatin1String(kThemeName));
+    ini::setValue(conf, QStringLiteral("UseDarkTheme"), QStringLiteral("False"));
+    // 字体为空就**整项不写**。
+    // 空的 `Font=` 会让 fcitx5 解析出 0 号字，而候选面板高度跟着文字高度走 ——
+    // 归零，面板整个看不见。真机上「一保存候选面板就消失」就是这个：保存后
+    // classicui.conf 里唯一的非默认键就是空的 Font=。
+    // 来源是 pages.cpp 的 `out.fontFace = font_->family();`，字体按钮取不到家族名
+    // 时返回空串。不写这一项，fcitx5 会保持它原有的字体，比写空值安全得多。
+    const QString family = style.fontFace.trimmed();
+    if (!family.isEmpty()) {
+      const int point = style.fontPoint > 0 ? style.fontPoint : 16;
+      ini::setValue(conf, QStringLiteral("Font"),
+                    QStringLiteral("%1 %2").arg(family).arg(point));
+    }
     ini::setValue(conf, QStringLiteral("Vertical Candidate List"),
                   boolText(style.textOrientation == QLatin1String("vertical")));
     result.files.append(conf);
