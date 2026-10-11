@@ -166,15 +166,29 @@ void MainWindow::saveAndDeploy() {
   // 画不出来**，且只在保存设置之后才发作（保存会把这个开关推过去）。
   // 两个主题内容一致，指回同一个没有任何损失；等深色主题真的生成出不同颜色了，
   // 再把这条路打开也不迟。
-  const QString classicError = RimeDeploy::setAddonConfig(
-      QStringLiteral("classicui"),
-      {{QStringLiteral("Theme"), QStringLiteral("BangKe")},
-       {QStringLiteral("DarkTheme"), QStringLiteral("BangKe")},
-       {QStringLiteral("UseDarkTheme"), false},
-       {QStringLiteral("Font"),
-        QStringLiteral("%1 %2").arg(data_.style.fontFace).arg(data_.style.fontPoint)},
-       {QStringLiteral("Vertical Candidate List"),
-        data_.style.textOrientation == QLatin1String("vertical")}});
+  QVariantMap classicConfig{
+      {QStringLiteral("Theme"), QStringLiteral("BangKe")},
+      {QStringLiteral("DarkTheme"), QStringLiteral("BangKe")},
+      {QStringLiteral("UseDarkTheme"), false},
+      {QStringLiteral("Vertical Candidate List"),
+       data_.style.textOrientation == QLatin1String("vertical")}};
+
+  // 字体为空时**整项都不推**。
+  //
+  // 空字符串会让 fcitx5 解析出 0 号字 —— 面板高度跟着文字高度走，于是归零、整个
+  // 看不见。真机上「在设置页保存后候选面板就消失」就是这个：保存之后
+  // classicui.conf 里唯一的非默认键就是空的 `Font=`。
+  // 来源是字体按钮取不到家族名时返回空串（pages.cpp 从控件读 family()）。
+  // 不推的话 fcitx5 保持它原有的字体，比推一个空值安全得多。
+  const QString family = data_.style.fontFace.trimmed();
+  if (!family.isEmpty()) {
+    const int point = data_.style.fontPoint > 0 ? data_.style.fontPoint : 16;
+    classicConfig.insert(QStringLiteral("Font"),
+                         QStringLiteral("%1 %2").arg(family).arg(point));
+  }
+
+  const QString classicError =
+      RimeDeploy::setAddonConfig(QStringLiteral("classicui"), classicConfig);
   if (!classicError.isEmpty()) pushErrors << classicError;
 
   // rime 侧配置还要走部署（编译词典/方案）。
