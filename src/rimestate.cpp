@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
+#include <chrono>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <sys/stat.h>
 #include "rimestate.h"
 #include "rimecandidate.h"
 #include <fcitx-utils/utf8.h>
@@ -100,6 +106,30 @@ void RimeState::selectSchema(const std::string &schema) {
     api->select_schema(session_, schema.data());
 }
 
+namespace {
+// 把修饰键（Shift/Ctrl/Alt/Super）的按下与松开、以及 rime 是否接受，记到文件里。
+//
+// 为什么需要：rime 的 ascii_composer 判定「Shift 切换中英文」要**成对的按下+松开**，
+// 且间隔必须 < 500ms。Shift 按下时 rime 返回 kNoop（不处理），我们就不
+// filterAndAccept —— 那个 release 到底有没有被 fcitx5 送到输入法，看代码看不出来。
+// 日志写到共享目录（Mac 侧可直接读），没有就写家目录。
+void keyTrace(const std::string& line) {
+  const char* home = ::getenv("HOME");
+  if (!home) return;
+  std::string dir = std::string(home) + "/bangke-share";
+  struct stat st{};
+  std::string path = (::stat(dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+                         ? dir + "/key-log.txt"
+                         : std::string(home) + "/key-log.txt";
+  std::ofstream f(path, std::ios::app);
+  if (!f) return;
+  const auto now = std::chrono::system_clock::now();
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      now.time_since_epoch()).count() % 100000;
+  f << "[" << ms << "] " << line << "\n";
+}
+}  // namespace
+
 void RimeState::keyEvent(KeyEvent &event) {
     auto api = engine_->api();
     if (!api || api->is_maintenance_mode()) {
@@ -126,6 +156,18 @@ void RimeState::keyEvent(KeyEvent &event) {
         intStates |= (1 << 30);
     }
     auto result = api->process_key(session_, event.rawKey().sym(), intStates);
+
+    // 修饰键：记下按下/松开、以及 rime 收不收
+    {
+        const uint32_t sym = event.rawKey().sym();
+        if (sym == 0xffe1u || sym == 0xffe3u) {  // Shift_L / Shift_R
+            std::ostringstream os;
+            os << "Shift " << (event.isRelease() ? "RELEASE" : "press")
+               << " rime=" << (result ? "accepted" : "kNoop")
+               << " ascii_mode=" << subMode();
+            keyTrace(os.str());
+        }
+    }
 
     auto ic = event.inputContext();
     RIME_STRUCT(RimeCommit, commit);
