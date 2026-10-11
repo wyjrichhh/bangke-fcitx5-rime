@@ -103,17 +103,22 @@ QString themeConfText(const PanelSpec& spec, bool showPaging,
   appendMargin(&out, QStringLiteral("InputPanel/TextMargin"), spec.textMargin);
   appendMargin(&out, QStringLiteral("InputPanel/ContentMargin"), spec.contentMargin);
 
+  // 面板底图与高亮**只用纯色，不用 Image**。
+  //
+  // 原来是 Image=background.png / highlight.png（九宫格切片）来画圆角。实测在
+  // Hyprland/Wayland 下：带 Image 时**候选面板整个画不出来**，去掉 Image 改纯色就
+  // 正常；把切片中心从 2px 放大到 16px、把 PNG 从 1-bit 换成 RGBA 都无效 —— 是这条
+  // 路径本身在 Wayland 下不可用，不是尺寸或格式问题。
+  // fcitx5 **自带主题**在这两处也只用 Color（Image 仅用于翻页箭头那类小图标），
+  // 这里跟它对齐。代价：Linux 上没有圆角了（纯色画不出圆角）。
   out << QStringLiteral("[InputPanel/Background]");
-  out << QStringLiteral("Image=background.png");
   out << QStringLiteral("Color=%1").arg(toThemeColor(spec.panelBackground));
-  // 边框烘在图里；这里给出色值只为「图片加载失败」的兜底路径不再画意外边框。
   out << QStringLiteral("BorderColor=%1").arg(toThemeColor(border));
   out << QString();
   appendMargin(&out, QStringLiteral("InputPanel/Background/Margin"),
                spec.backgroundMargin);
 
   out << QStringLiteral("[InputPanel/Highlight]");
-  out << QStringLiteral("Image=highlight.png");
   out << QStringLiteral("Color=%1").arg(toThemeColor(spec.highlightBackground));
   out << QString();
   appendMargin(&out, QStringLiteral("InputPanel/Highlight/Margin"),

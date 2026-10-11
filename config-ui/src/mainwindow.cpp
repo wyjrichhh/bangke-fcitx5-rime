@@ -158,11 +158,19 @@ void MainWindow::saveAndDeploy() {
       QStringLiteral("rime"),
       {{QStringLiteral("PreeditInApplication"), data_.preeditInApp}});
   if (!rimeError.isEmpty()) pushErrors << rimeError;
+  // 不启用「跟随系统深色」（UseDarkTheme=False，DarkTheme 指回同一个主题）。
+  //
+  // 原因：生成器目前给 BangKe 和 BangKe-Dark 产出的是**完全相同**的一份主题
+  // （颜色逐行一致），所以这个开关本来就没在起作用。而一旦置 True，fcitx5 会转而
+  // 走 DarkTheme 那条分支去加载主题 —— 实测在 Hyprland/Wayland 下**候选面板会整个
+  // 画不出来**，且只在保存设置之后才发作（保存会把这个开关推过去）。
+  // 两个主题内容一致，指回同一个没有任何损失；等深色主题真的生成出不同颜色了，
+  // 再把这条路打开也不迟。
   const QString classicError = RimeDeploy::setAddonConfig(
       QStringLiteral("classicui"),
       {{QStringLiteral("Theme"), QStringLiteral("BangKe")},
-       {QStringLiteral("DarkTheme"), QStringLiteral("BangKe-Dark")},
-       {QStringLiteral("UseDarkTheme"), true},
+       {QStringLiteral("DarkTheme"), QStringLiteral("BangKe")},
+       {QStringLiteral("UseDarkTheme"), false},
        {QStringLiteral("Font"),
         QStringLiteral("%1 %2").arg(data_.style.fontFace).arg(data_.style.fontPoint)},
        {QStringLiteral("Vertical Candidate List"),
