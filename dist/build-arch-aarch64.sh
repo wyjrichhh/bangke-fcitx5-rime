@@ -156,6 +156,18 @@ cp "$PRIV/config-ui/build/fcitx5-rime-config" "$PKG/usr/bin/"
 # deb 用的 /usr/local/share 在 Arch 上扫不到（实测 fcitx5-diagnose 数不到 Rime）。
 echo /usr/lib/fcitx5-rime-ai > "$PKG/etc/ld.so.conf.d/fcitx5-rime-ai.conf"
 
+# 品牌名注入（与 deb 的 repack-container.sh 同一套做法）。
+# 生成的 conf 里带的是上游名字（Name[zh_CN]=中州韻），用户会看到「中州韵」——
+# 必须连**本地化键**一起换：fcitx5 按 locale 优先取 Name[zh_CN] 这种带后缀的键，
+# 只改裸 Name= 的话中文用户看到的还是上游名。
+[ -f "$PRIV/dist/im-brand.env" ] && . "$PRIV/dist/im-brand.env"
+IM_NAME="${IM_NAME:-蚌壳拼音}"
+for conf in "$PKG/usr/share/fcitx5/inputmethod/rime.conf" \
+            "$PKG/usr/share/fcitx5/addon/rime.conf" \
+            "$PKG/usr/share/applications/fcitx5-rime-config.desktop"; do
+  [ -f "$conf" ] && sed -i -E "s/^Name(\[[^]]*\])?=.*/Name\1=$IM_NAME/" "$conf"
+done
+
 # 数据部分与 Ubuntu 线同源：种子配置来自私有库，词库/字体/模型来自 vendor。
 mkdir -p "$PKG/usr/share/fcitx5-rime/seed"
 cp -a "$PRIV/data/ai-predict-defaults/"*.custom.yaml "$PKG/usr/share/fcitx5-rime/seed/"

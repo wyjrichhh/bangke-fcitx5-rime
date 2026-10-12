@@ -11,14 +11,16 @@
 #     sudo pacman -U bangke-pinyin-*.pkg.tar.zst
 pkgname=bangke-pinyin
 pkgver=5.0.12
-pkgrel=1
+pkgrel=2
 pkgdesc='蚌壳拼音 —— 基于 Rime 的 fcitx5 输入法（含 CTranslate2 AI 预测）'
 arch=('aarch64' 'x86_64')
 url='https://bangke.ai'
 license=('BSD')
 # 运行期依赖。第三方 .so 不随包分发（Arch 由 pacman 保证版本），所以这里必须列全：
 # librime-data 是引擎数据，qt5-wayland 让设置程序在 Wayland 会话下能起来。
-depends=('fcitx5' 'qt5-base' 'qt5-wayland' 'librime-data' 'google-glog' 'yaml-cpp'
+# boost 必须有：librime 与 addon 都链 libboost_filesystem，缺了 addon 直接加载不了
+# （实测表现：fcitx5 里能列出条目但标「不可用」）。
+depends=('fcitx5' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost' 'google-glog' 'yaml-cpp'
          'gflags' 'leveldb' 'marisa' 'opencc' 'lua')
 optdepends=('noto-fonts-cjk: 面板中文字体（包内已带两款，这是额外兜底）')
 # 装/卸的维护逻辑全在这一个文件里：装完铺种子、注册输入法、按需生成主题；
