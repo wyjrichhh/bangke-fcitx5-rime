@@ -359,8 +359,10 @@ RimeData YamlConfig::load() {
 
   data.preeditInApp = readIniBool(rimeAddonConfPath(), "PreeditInApplication", true);
   const QStringList iceCustom = readLines(dir + "/rime_ice.custom.yaml");
+  // 只有显式写了 "1" 才算开。旧写法是 `!= "0"`，那么「文件里没这个键」会被当成
+  // 开 —— 而雾凇 schema 原生 spelling_hints: 8，于是默认就带拼音注释。
   data.spellingHints =
-      readScalar(iceCustom, "translator/spelling_hints") != "0";
+      readScalar(iceCustom, "translator/spelling_hints") == "1";
 
   // 展示两个内置方案 + schema_list 里已有的（用户自装方案加入列表后即可管理）。
   QStringList names = kKnownSchemas;

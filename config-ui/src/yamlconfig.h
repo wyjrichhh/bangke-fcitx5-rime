@@ -42,7 +42,9 @@ struct RimeData {
   // 关闭后拼音改在候选框顶部显示）。
   bool preeditInApp = true;
   // 候选词后的 [拼音] 注释（schema 的 translator/spelling_hints）。
-  bool spellingHints = true;
+  // 默认关：用户不要候选右侧那串拼音。雾凇原生的 schema 给的是 8（前 8 个候选
+  // 都带注释），所以必须显式写 0 才能压住，光靠"不写"是不行的。
+  bool spellingHints = false;
   // 候选面板外观。存在 rime 用户配置的 bangke.yaml / bangke.custom.yaml 里，
   // 与 mac/Windows 同键名；classicui 主题是它的派生物。
   bangke::StyleOptions style;
