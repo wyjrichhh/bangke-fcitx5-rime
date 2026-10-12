@@ -1,4 +1,8 @@
 patch:
+  # 方案在切换菜单里显示的名字。上游叫「朙月拼音」/「雾凇拼音」—— 用户看到的是
+  # 我们这一整套的一部分，所以统一成蚌壳前缀。只改显示名，schema_id 不动
+  # （改了会让用户已有的自造词/配置对不上方案）。
+  schema/name: 蚌壳-明月
   # 改用扩展词库(雾凇 rime-ice 核心全拼分片),只换词库不换 schema。
   # 词典定义见随包分发的 luna_pinyin.extended.dict.yaml(由 postinstall
   # 连同 cn_dicts/ 分片一起铺到用户 ~/.local/share/fcitx5/rime/)。词源 iDvel/rime-ice。
