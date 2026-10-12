@@ -8,6 +8,7 @@ _ldconfig() { ldconfig 2>/dev/null || true; }
 
 # 记下我们动过哪个家目录，卸载时照着回收（与 deb 侧的 /var/lib/bangke-pinyin 同一套约定）。
 _BK_STATE=/var/lib/bangke-pinyin
+SEED=/usr/share/fcitx5-rime/seed
 _record() { mkdir -p "$_BK_STATE"; grep -qxF "$2" "$_BK_STATE/$1" 2>/dev/null || echo "$2" >> "$_BK_STATE/$1"; }
 
 # OpenCC：Arch 只有 1.3.x，而 1.3 把带 normalization 的配置编成 PipelineConverter，
@@ -37,14 +38,32 @@ PYEOF
   chmod -R a+rX /usr/share/rime-data 2>/dev/null || true
 }
 
+# 从旧版（addon 名 rime）升上来的迁移。
+#
+# 旧包在 profile 里注册的是 Name=rime、addon 自己的配置在 conf/rime.conf —— 两个名字都
+# 跟着 addon 改成了 rime-ai。不改的话：profile 里那条会变成指向已删 addon 的死条目，
+# 用户「在应用内显示拼音预编辑」的设置会被当成没设过、悄悄退回默认值。
+# 就地改名（不挪位置），保留用户自己的输入法顺序。
+_migrate_from_rime() {
+  local h="$1"
+  [ -n "$h" ] && [ -d "$h" ] || return 0
+  local p="$h/.config/fcitx5/profile"
+  if [ -f "$p" ]; then
+    sed -i 's/^Name=rime$/Name=rime-ai/; s/^DefaultIM=rime$/DefaultIM=rime-ai/' "$p" 2>/dev/null || true
+  fi
+  local c="$h/.config/fcitx5/conf"
+  if [ -f "$c/rime.conf" ] && [ ! -e "$c/rime-ai.conf" ]; then
+    mv "$c/rime.conf" "$c/rime-ai.conf" 2>/dev/null || true
+  fi
+}
+
 _seed_user() {
   local h="$1"
   [ -n "$h" ] && [ -d "$h" ] || return 0
-  local seed=/usr/share/fcitx5-rime/seed
   local rime="$h/.local/share/fcitx5/rime"
   mkdir -p "$rime"
   # -n：不能覆盖用户已有的 *.custom.yaml（与 mac/deb 侧的 soft-write 一致）
-  cp -an "$seed"/. "$rime"/ 2>/dev/null || true
+  cp -an "$SEED"/. "$rime"/ 2>/dev/null || true
 
   # 按键合并出厂配置。
   #
@@ -59,62 +78,81 @@ _seed_user() {
   # 有配置就绝不覆盖（那等于替别人的输入法改外观）。只在原本没有时给一份品牌默认，
   # 并记下来，卸载时删掉、回到原样。
   if [ -e "$h/.config/fcitx5/conf/classicui.conf" ]; then
-    echo "  已有 classicui.conf，跳过主题生成（不覆盖用户面板配置）"
+    echo "  $h 已有 classicui.conf，跳过主题生成（不覆盖用户面板配置）"
   else
     HOME="$h" fcitx5-rime-config --generate-theme >/dev/null 2>&1 \
       && _record generated-classicui "$h"
   fi
 
-  # 把 rime 注册进输入法组，并**排在第一位**。
-  # 不能只追加到末尾：Ctrl+空格 是按组内顺序向后枚举的，末尾等于「按一下切到别的
-  # 输入法」。真机（Omarchy 预装了 chewing）上就是这么翻车的。
+  # 把 rime-ai 注册进输入法组，并**排在第一位**。
+  #
+  # 无条件跑（不是「缺了才补」）：上面生成主题那步会调 fcitx5-rime-config，而它自己也会
+  # 把我们的输入法注册进 profile（插在末尾）。要是这里只在「缺了才补」，那条末尾的注册
+  # 就会一直留着 —— Ctrl+空格 按一下先切到别的输入法，正是要避免的那个坑。
+  # _register_im_first 幂等，已经是第一位时内容不变。
   _record registered-profile "$h"
+  _migrate_from_rime "$h"
   local p="$h/.config/fcitx5/profile"
   mkdir -p "$(dirname "$p")"
   if [ ! -f "$p" ]; then
-    printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=rime\n\n[Groups/0/Items/0]\nName=rime\nLayout=\n\n[Groups/0/Items/1]\nName=keyboard-us\nLayout=\n\n[GroupOrder]\n0=Default\n' > "$p"
-  elif ! grep -q '^Name=rime$' "$p"; then
-    # 收集现有输入法（保序去重），rime 打头
-    local -a ims=(); local in_items=0 line n skip x
-    while IFS= read -r line || [ -n "$line" ]; do
-      case $line in
-        \[Groups/0/Items/*) in_items=1; continue ;;
-        \[*)                in_items=0; continue ;;
-      esac
-      [ "$in_items" = 1 ] || continue
-      case $line in Name=*) ;; *) continue ;; esac
-      n=${line#Name=}; skip=0
-      for x in ${ims[@]+"${ims[@]}"}; do [ "$x" = "$n" ] && skip=1; done
-      [ "$skip" = 1 ] || ims+=("$n")
-    done < "$p"
-    local -a out=(rime); local has_kb=0
-    for n in ${ims[@]+"${ims[@]}"}; do
-      [ "$n" = rime ] && continue
-      [ "$n" = keyboard-us ] && has_kb=1
-      out+=("$n")
-    done
-    [ "$has_kb" = 1 ] || out+=(keyboard-us)
-    { printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=rime\n\n'
-      local i=0
-      for n in "${out[@]}"; do printf '[Groups/0/Items/%s]\nName=%s\nLayout=\n\n' "$i" "$n"; i=$((i+1)); done
-      printf '[GroupOrder]\n0=Default\n'; } > "$p.new"
-    mv "$p.new" "$p"
+    printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=rime-ai\n\n[Groups/0/Items/0]\nName=rime-ai\nLayout=\n\n[Groups/0/Items/1]\nName=keyboard-us\nLayout=\n\n[GroupOrder]\n0=Default\n' > "$p"
+  else
+    _register_im_first "$p"
   fi
 
   chown -R "$(stat -c '%U:%G' "$h" 2>/dev/null || echo root)" \
         "$rime" "$h/.config/fcitx5" "$h/.local/share/fcitx5/themes" 2>/dev/null || true
 }
 
+# 把 rime-ai 插到**第 0 组的第一位**。
+#
+# 为什么必须靠前：Ctrl+空格 是按组内顺序向后枚举的，排在末尾等于「按一下切到别的输入法」
+# （真机 Omarchy 预装 chewing 时就是这么翻车的）。
+# 为什么只动第 0 组：早先的实现是整份重写 profile，会把用户的第二个输入法组、组内条目
+# 自己的 Layout= 一起删掉 —— 这里改成只摘掉第 0 组的条目节、原地重排，其余字节原样保留。
+_register_im_first() {
+  local p="$1" tmp="$p.bangke-register"
+  awk -v ours=rime-ai '
+    BEGIN { n = 0; done_ = 0; in0 = 0 }   # n 必须初始化：awk 里未初始化是空串，
+                                          # name[""] 不是 name[0]，第一个条目会被吞掉
+    function emit(   i) {
+      printf "[Groups/0/Items/0]\nName=%s\nLayout=\n\n", ours
+      for (i = 0; i < n; i++) printf "[Groups/0/Items/%d]\nName=%s\n%s\n\n", i + 1, name[i], layout[i]
+      done_ = 1
+    }
+    /^\[Groups\/0\/Items\/[0-9]+\]$/ { skip = 1; taken = 0; cur = -1; next }
+    skip && /^\[/ { skip = 0 }
+    skip {
+      if (!taken && $0 ~ /^Name=/) {
+        taken = 1
+        nm = substr($0, 6)
+        if (nm != "" && nm != ours && !(nm in dup)) { dup[nm] = 1; name[n] = nm; layout[n] = "Layout="; cur = n; n++ }
+      } else if (cur >= 0 && $0 ~ /^Layout=/) {
+        layout[cur] = $0
+      }
+      next
+    }
+    /^\[Groups\/0\]$/ { in0 = 1; print; next }
+    in0 && !done_ && $0 ~ /^\[/ { emit() }
+    in0 && !done_ && /^DefaultIM=/ { print "DefaultIM=" ours; next }
+    { print }
+    END { if (in0 && !done_) emit() }
+  ' "$p" > "$tmp" 2>/dev/null || { rm -f "$tmp"; return 0; }
+  mv "$tmp" "$p"
+}
+
 # 只把「产品拥有、设置页里没有入口」的键合并进用户已有的 custom 文件，其余原样保留。
 #   default.custom.yaml 的 schema_list —— 默认方案
+#   <方案>.custom.yaml 的 schema/name —— 方案显示名（「蚌壳-雾凇」这套前缀）。**每次升级
+#     都按 seed 纠正**：切换输入法时那个气泡显示的是它推出来的短标签（「蚌-雾」，见
+#     rimestate 的 shortSchemaLabel），`cp -an` 不覆盖老文件，不主动并进来老用户永远看不到
 #   <方案>.custom.yaml 的 translator/spelling_hints —— **只在用户没设过时才补**
 #     （设置页有「拼写提示」开关，那是用户的，不能每次升级都强行改回去）
 _merge_factory_config() {
   local h="$1"
   local rime="$h/.local/share/fcitx5/rime"
-  local seed=/usr/share/fcitx5-rime/seed
   command -v python3 >/dev/null 2>&1 || return 0
-  python3 - "$rime" "$seed" <<'PYEOF' 2>/dev/null || true
+  python3 - "$rime" "$SEED" <<'PYEOF' 2>/dev/null || true
 import os, re, sys
 rime, seed = sys.argv[1], sys.argv[2]
 
@@ -157,12 +195,23 @@ if d is not None and s is not None:
                     break
         open(dst, "w", encoding="utf-8").write("\n".join(out) + "\n")
 
-# 2) 拼音注释：**只补默认值**。用户文件里已经有这个键就说明他设过，不动。
+# 2) 方案文件：显示名（产品拥有，每次都纠正）与拼音注释（用户的，只补默认值）
 for name in ("rime_ice.custom.yaml", "luna_pinyin.custom.yaml"):
-    p = os.path.join(rime, name)
-    ls = lines(p)
+    dst = os.path.join(rime, name)
+    ls = lines(dst)
     if ls is None:
         continue
+    seed_ls = lines(os.path.join(seed, name)) or []
+    schema_name = next((l.strip() for l in seed_ls
+                        if l.strip().startswith("schema/name:")), None)
+    if schema_name and not any(l.strip().startswith("schema/name:") for l in ls):
+        for j, ln in enumerate(ls):
+            if ln.strip() == "patch:":
+                ls.insert(j + 1, "  " + schema_name)
+                break
+    if schema_name:
+        ls = ["  " + schema_name if l.strip().startswith("schema/name:") else l
+              for l in ls]
     # 已经在迁移过的机器上就完全不动（标记见 _run）
     migrate = os.environ.get("BANGKE_SPELLING_MIGRATED") == "1"
     if any(l.strip().startswith("translator/spelling_hints:") for l in ls) and migrate:
@@ -170,15 +219,12 @@ for name in ("rime_ice.custom.yaml", "luna_pinyin.custom.yaml"):
         # 之后那个键就归用户的「拼写提示」开关管，升级不再碰。
         ls = ["  translator/spelling_hints: 0"
               if l.strip().startswith("translator/spelling_hints:") else l for l in ls]
-        open(p, "w", encoding="utf-8").write("\n".join(ls) + "\n")
-        continue
-    if any(l.strip().startswith("translator/spelling_hints:") for l in ls):
-        continue
-    for j, ln in enumerate(ls):
-        if ln.strip() == "patch:":
-            ls[j+1:j+1] = ["  translator/spelling_hints: 0"]
-            break
-    open(p, "w", encoding="utf-8").write("\n".join(ls) + "\n")
+    elif not any(l.strip().startswith("translator/spelling_hints:") for l in ls):
+        for j, ln in enumerate(ls):
+            if ln.strip() == "patch:":
+                ls[j+1:j+1] = ["  translator/spelling_hints: 0"]
+                break
+    open(dst, "w", encoding="utf-8").write("\n".join(ls) + "\n")
 PYEOF
 }
 
@@ -190,13 +236,40 @@ PYEOF
 _BK_ENV=""
 _BK_USER=""
 
+# 停/起 fcitx5 用的小工具。
+#
+# 为什么装包要先停它：**fcitx5 把输入法组放在内存里**，运行时被改动的 profile 会在
+# 它退出或配置变更时按内存里的旧内容写回 —— 于是装包时注册进去的 rime 被抹掉，
+# 表现就是「装完了却看不到蚌壳拼音」。真机上实测踩过两次（候选面板那条也是同一类）。
+#
+# 能交给 systemd 就交给它：Omarchy 的 omarchy-fcitx5.service 是 `Restart=always`，
+# 我们 pkill 之后它会自己拉一个新的（带 unit 里那套参数，托盘 drop-in 也才算数）；
+# 我们再手动 `fcitx5 -r -d` 上去就是两个实例互抢，最后活下来的是谁看运气。
+_BK_ENV=""
+_BK_USER=""
+_BK_UNIT="omarchy-fcitx5.service"
+
+# 把抄下来的会话环境 + 用户名交给一个命令去跑（从 root 直接起会丢 WAYLAND_DISPLAY）
+_bk_as_user() {
+  [ -n "$_BK_USER" ] || return 1
+  [ "$_BK_USER" = root ] && return 1
+  command -v sudo >/dev/null 2>&1 || return 1
+  if [ -n "$_BK_ENV" ]; then
+    # shellcheck disable=SC2086
+    sudo -u "$_BK_USER" -H env $_BK_ENV "$@" >/dev/null 2>&1
+  else
+    sudo -u "$_BK_USER" -H "$@" >/dev/null 2>&1
+  fi
+}
+
 _stop_fcitx5() {
   _BK_ENV=""; _BK_USER=""
   local pid
-  pid=$(pgrep -x fcitx5 | head -1)
+  pid=$(pgrep -x fcitx5 | head -1) || true
   [ -n "$pid" ] || return 0
-  _BK_USER=$(stat -c '%U' "$pid" 2>/dev/null)
-  if [ -r "$pid/environ" ]; then :; fi
+  # 必须走 /proc/<pid>：直接 stat "$pid" 是个相对路径、必然失败，_BK_USER 空掉之后
+  # 末尾那次 _start_fcitx5 就静默不执行了（装完 fcitx5 一直没起来，只能重新登录）。
+  _BK_USER=$(stat -c '%U' "/proc/$pid" 2>/dev/null)
   if [ -r "/proc/$pid/environ" ]; then
     local v line
     for v in WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS \
@@ -204,6 +277,10 @@ _stop_fcitx5() {
       line=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -m1 "^$v=")
       [ -n "$line" ] && _BK_ENV="$_BK_ENV $line"
     done
+  fi
+  # 进程归 systemd 管就让 systemd 停（它不会 Restart=always 自己顶回来）
+  if _bk_as_user systemctl --user is-active --quiet "$_BK_UNIT"; then
+    _bk_as_user systemctl --user stop "$_BK_UNIT" || true
   fi
   pkill -x fcitx5 2>/dev/null || true
   local i
@@ -215,6 +292,15 @@ _start_fcitx5() {
   [ -n "$_BK_USER" ] || return 0
   [ "$_BK_USER" = root ] && return 0
   command -v sudo >/dev/null 2>&1 || return 0
+  # 有 unit 就走 unit（它的 ExecStart 才会带上托盘 drop-in 的配置），但要确认真的起来了：
+  # unit 里那条 ConditionEnvironment 不满足时 systemctl 也返回 0，却什么都没跑。
+  if _bk_as_user systemctl --user restart "$_BK_UNIT"; then
+    local i
+    for i in $(seq 1 10); do
+      pgrep -x fcitx5 >/dev/null && return 0
+      sleep 1
+    done
+  fi
   if [ -n "$_BK_ENV" ]; then
     # shellcheck disable=SC2086
     sudo -u "$_BK_USER" -H env $_BK_ENV fcitx5 -r -d >/dev/null 2>&1 &
@@ -270,11 +356,11 @@ _unregister_im() {
   p="$h/.config/fcitx5/profile"
   [ -f "$p" ] || return 0
   tmp="$p.bangke-uninstall"
-  # 第一趟：摘掉我们写进去的那段（判据是「节体第一行是 Name=rime」，别人家的不动）。
+  # 第一趟：摘掉我们写进去的那段（判据是「节体第一行是 Name=rime-ai」，别人家的不动）。
   awk '
     /^\[Groups\/[0-9]+\/Items\/[0-9]+\]/ {
       hdr = $0; getline nxt
-      if (nxt == "Name=rime") { getline; next }
+      if (nxt == "Name=rime-ai") { getline; next }
       print hdr; print nxt; next
     }
     { print }
@@ -289,7 +375,7 @@ _unregister_im() {
     { print }
   ' "$tmp" > "$tmp.2" 2>/dev/null && mv "$tmp.2" "$p" || { rm -f "$tmp" "$tmp.2"; return 0; }
   rm -f "$tmp"
-  sed -i 's/^DefaultIM=rime$/DefaultIM=/' "$p" 2>/dev/null || true
+  sed -i 's/^DefaultIM=rime-ai$/DefaultIM=/' "$p" 2>/dev/null || true
   # profile 整份是我们建的，删干净后只剩空壳 —— 直接删掉，回到「我们没来过」的样子。
   grep -q '^\[Groups/[0-9]*/Items/' "$p" 2>/dev/null || rm -f "$p"
 }
@@ -309,5 +395,13 @@ post_remove() {
   fi
   rm -rf "$_BK_STATE"
   _ldconfig
+  # 托盘 drop-in 已经随包删掉了，得让 systemd 忘掉它 —— 否则重新拉起 fcitx5 时用的还是
+  # 旧配置（带 --disable notificationitem）。拿不到 runtime 目录就算了，下次登录自然生效。
+  local u="${SUDO_USER:-$_BK_USER}"
+  if [ -n "$u" ] && [ "$u" != root ]; then
+    local rt="/run/user/$(id -u "$u" 2>/dev/null)"
+    [ -d "$rt" ] && sudo -u "$u" XDG_RUNTIME_DIR="$rt" \
+      systemctl --user daemon-reload >/dev/null 2>&1 || true
+  fi
   _start_fcitx5
 }

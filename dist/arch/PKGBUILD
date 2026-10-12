@@ -11,7 +11,7 @@
 #     sudo pacman -U bangke-pinyin-*.pkg.tar.zst
 pkgname=bangke-pinyin
 pkgver=5.0.12
-pkgrel=3
+pkgrel=8
 pkgdesc='蚌壳拼音 —— 基于 Rime 的 fcitx5 输入法（含 CTranslate2 AI 预测）'
 arch=('aarch64' 'x86_64')
 url='https://bangke.ai'
@@ -26,6 +26,14 @@ license=('BSD')
 # 一个 libboost-filesystem-dev 全给。
 depends=('fcitx5' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost-libs' 'google-glog'
          'yaml-cpp' 'gflags' 'leveldb' 'marisa' 'opencc' 'lua')
+# 我们的 addon 已改名 rime-ai，addon 自己的文件不再与发行版同名；但设置程序的
+# /usr/bin/fcitx5-rime-config 与 applications/*.desktop 仍与发行版 fcitx5-rime 同路径 ——
+# 不声明关系，pacman 会因为「文件已属于别的包」拒绝安装，或者两份互相覆盖。
+# 我们本来就是它的替代品，且共用同一个 rime 用户目录，所以明确取代、不共存
+# （与 deb 侧 control 里的 Conflicts/Replaces/Provides 同一套语义）。
+conflicts=('fcitx5-rime')
+replaces=('fcitx5-rime')
+provides=('fcitx5-rime')
 optdepends=('noto-fonts-cjk: 面板中文字体（包内已带两款，这是额外兜底）')
 # 装/卸的维护逻辑全在这一个文件里：装完铺种子、注册输入法、按需生成主题；
 # 卸载时对称回收（我们注册的条目、我们生成的面板配置）。

@@ -21,17 +21,23 @@ OUT="${OUT:-/out}"
 SRC=/out/src          # 容器内的构建工作区（/out 是持久化的，便于 SKIP_LIBRIME 复用）
 VERSION="${VERSION:-5.0.12}"
 SKIP_LIBRIME="${SKIP_LIBRIME:-0}"
+SKIP_DEPS="${SKIP_DEPS:-0}"
 
 # ---------------------------------------------------------------- 依赖
 echo "=== [1/7] 安装依赖 ==="
-# 容器里的 pacman 下载沙箱要 Landlock，某些内核上不可用；失败就关掉重来。
-pacman -Syu --noconfirm || { sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf; pacman -Syu --noconfirm; }
-for _ in 1 2 3; do
-  pacman -S --needed --noconfirm \
-    base-devel cmake ninja git extra-cmake-modules gettext pkgconf sudo \
-    fcitx5 qt5-base boost google-glog yaml-cpp gflags leveldb marisa opencc capnproto lua \
-    && break
-done
+# SKIP_DEPS=1：依赖已经装好的环境（把出过包的容器 commit 成镜像）跳过联网装包。
+# 镜像站被本机 fake-ip 代理劫持或抽风时，pacman 会以「Operation too slow」收场，
+# 而这一步失败会直接把整个脚本带走 —— 那时用这个开关，不必等网络。
+if [ "$SKIP_DEPS" != "1" ]; then
+  # 容器里的 pacman 下载沙箱要 Landlock，某些内核上不可用；失败就关掉重来。
+  pacman -Syu --noconfirm || { sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf; pacman -Syu --noconfirm; }
+  for _ in 1 2 3; do
+    pacman -S --needed --noconfirm \
+      base-devel cmake ninja git extra-cmake-modules gettext pkgconf sudo \
+      fcitx5 qt5-base boost google-glog yaml-cpp gflags leveldb marisa opencc capnproto lua \
+      && break
+  done
+fi
 
 # Arch 滚动版把 cmake 4.x 上对 cmake_minimum_required(<3.5) 的兼容移除了，而几个第三方
 # 工程的 CMakeLists 还写着老版本号 —— 统一放行，不改上游源码。
@@ -123,7 +129,7 @@ PKG="$OUT/bangke-pkg"
 rm -rf "$PKG"
 mkdir -p "$PKG"/{usr/lib/fcitx5,usr/lib/fcitx5-rime-ai/rime-plugins,usr/bin,etc/ld.so.conf.d,usr/share/fcitx5/{addon,inputmethod},usr/share/applications}
 
-cp "$PRIV/build/src/rime.so"                        "$PKG/usr/lib/fcitx5/rime.so"
+cp "$PRIV/build/src/rime-ai.so"                     "$PKG/usr/lib/fcitx5/rime-ai.so"
 cp /usr/local/lib/libctranslate2.so*                "$PKG/usr/lib/fcitx5-rime-ai/"
 cp "$SRC/librime/build/lib/librime.so.1."*          "$PKG/usr/lib/fcitx5-rime-ai/"
 # addon 与插件的 DT_NEEDED 都是 SONAME librime.so.1，包里必须有这个名字。
@@ -133,19 +139,19 @@ ln -sf librime.so.1 "$PKG/usr/lib/fcitx5-rime-ai/librime.so"
 # 四个插件一起装：rime_ice 依赖 lua，缺了会刷上百条 error creating translator。
 cp "$SRC/librime/build/lib/rime-plugins/"*.so       "$PKG/usr/lib/fcitx5-rime-ai/rime-plugins/"
 
-# addon 与设置程序的**数据文件**（/usr/share/fcitx5/addon/rime.conf、inputmethod/rime.conf、
+# addon 与设置程序的**数据文件**（/usr/share/fcitx5/addon/rime-ai.conf、inputmethod/rime-ai.conf、
 # desktop、图标…）走各自的 cmake install 规则 —— 缺了 addon conf，fcitx5 根本不知道有
 # 这个输入法：装包不报错，但重启后切不出来。（Ubuntu 线一直是用 install 拿的这些。）
 DESTDIR="$PKG" cmake --install "$PRIV/build" --prefix /usr
 DESTDIR="$PKG" cmake --install "$PRIV/config-ui/build" --prefix /usr
 
-# addon 描述文件由 src/rime-addon.conf.in.in 生成，装到 ${FCITX_INSTALL_PKGDATADIR}/addon
+# addon 描述文件由 src/rime-ai-addon.conf.in.in 生成，装到 ${FCITX_INSTALL_PKGDATADIR}/addon
 # —— 那个变量在容器里会解析成 /usr/local/share/fcitx5，而 fcitx5 在 Arch 上只扫
 # /usr/share/fcitx5。**这是最初「装完切不出输入法」的根因**：文件在，但位置不对，
-# fcitx5 压根不知道有 rime 这个 addon。挪到它认的位置，别留 /usr/local 那棵树。
-if [ -f "$PKG/usr/local/share/fcitx5/addon/rime.conf" ]; then
+# fcitx5 压根不知道有这个 addon。挪到它认的位置，别留 /usr/local 那棵树。
+if [ -f "$PKG/usr/local/share/fcitx5/addon/rime-ai.conf" ]; then
   mkdir -p "$PKG/usr/share/fcitx5/addon"
-  mv "$PKG/usr/local/share/fcitx5/addon/rime.conf" "$PKG/usr/share/fcitx5/addon/rime.conf"
+  mv "$PKG/usr/local/share/fcitx5/addon/rime-ai.conf" "$PKG/usr/share/fcitx5/addon/rime-ai.conf"
 fi
 rm -rf "$PKG/usr/local"
 
@@ -156,17 +162,16 @@ cp "$PRIV/config-ui/build/fcitx5-rime-config" "$PKG/usr/bin/"
 # deb 用的 /usr/local/share 在 Arch 上扫不到（实测 fcitx5-diagnose 数不到 Rime）。
 echo /usr/lib/fcitx5-rime-ai > "$PKG/etc/ld.so.conf.d/fcitx5-rime-ai.conf"
 
-# 品牌名注入（与 deb 的 repack-container.sh 同一套做法）。
-# 生成的 conf 里带的是上游名字（Name[zh_CN]=中州韻），用户会看到「中州韵」——
-# 必须连**本地化键**一起换：fcitx5 按 locale 优先取 Name[zh_CN] 这种带后缀的键，
-# 只改裸 Name= 的话中文用户看到的还是上游名。
-[ -f "$PRIV/dist/im-brand.env" ] && . "$PRIV/dist/im-brand.env"
-IM_NAME="${IM_NAME:-蚌壳拼音}"
-for conf in "$PKG/usr/share/fcitx5/inputmethod/rime.conf" \
-            "$PKG/usr/share/fcitx5/addon/rime.conf" \
-            "$PKG/usr/share/applications/fcitx5-rime-config.desktop"; do
-  [ -f "$conf" ] && sed -i -E "s/^Name(\[[^]]*\])?=.*/Name\1=$IM_NAME/" "$conf"
-done
+# 托盘图标：Omarchy 的 omarchy-fcitx5.service 默认写着 `--disable notificationitem`
+# （它的理由是「会和栏自己画的指示器重复」）。这份 drop-in 把它打开，托盘里才有 fcitx5 的
+# 状态图标 —— 右键菜单里挂着「蚌壳拼音 设置 / 部署 / 同步」。别的 Arch 机器上没有那个
+# unit，文件躺着不生效；装了的人想恢复原状就删掉它（文件头注释里写了命令）。
+mkdir -p "$PKG/etc/systemd/user/omarchy-fcitx5.service.d"
+cp "$PRIV/dist/arch/10-bangke-tray.conf" "$PKG/etc/systemd/user/omarchy-fcitx5.service.d/"
+
+# 品牌名不在这里做 —— 它直接写在物料里（src/rime-ai.conf.in、src/rime-ai-addon.conf.in.in、
+# config-ui/data/fcitx5-rime-config.desktop、metainfo）。以前是打包时 sed 改，但 msgfmt 会拿
+# po 展开出 Name[zh_CN]=中州韵 这类本地化键，漏改一个键就漏上游文案出去（Comment 就这么漏过）。
 
 # 数据部分与 Ubuntu 线同源：种子配置来自私有库，词库/字体/模型来自 vendor。
 mkdir -p "$PKG/usr/share/fcitx5-rime/seed"
@@ -181,6 +186,11 @@ cp -a "/vendor/models/$DEFAULT_MODEL"                "$PKG/usr/share/fcitx5-rime
 cp -a "$PRIV/data/bangke.yaml"                       "$PKG/usr/share/fcitx5-rime/seed/bangke.yaml"
 mkdir -p "$PKG/usr/share/fonts/truetype/fcitx5-rime"
 cp -a /vendor/fonts/*.ttf /vendor/fonts/*.otf "$PKG/usr/share/fonts/truetype/fcitx5-rime/" 2>/dev/null || true
+
+# makepkg 跑在 fakeroot 里，会把文件的 uid/gid 原样记进包 —— 而 /out 是从 Mac 挂进来的，
+# 那边的文件在里面显示成 uid 501（Mac 的 rich）。cp -a 会把它带进安装树，装到用户机器上
+# 就出现「包内某个目录属主是 501」。统一压回 root:root，别把宿主机的 uid 漏进包。
+chown -R 0:0 "$PKG" 2>/dev/null || true
 
 # ---------------------------------------------------------------- 打 pacman 包
 echo "=== [7/7] makepkg ==="
