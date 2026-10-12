@@ -58,7 +58,7 @@ package architecture (amd64) does not match system (arm64)
    fcitx5 -r       # 或注销后重新登录
    ```
 2. 用 fcitx5 配置工具 → 附加组件 → 确认「Rime」已勾选启用。
-3. 确认 addon 文件在位：`ls /usr/local/lib/fcitx5/rime.so`
+3. 确认 addon 文件在位：`ls /usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so`
 
 ## 5. 切到 rime 但打不出字 / 无候选
 
@@ -66,7 +66,7 @@ package architecture (amd64) does not match system (arm64)
 1. 确认依赖都解析（不应有 `not found`）：
    ```bash
    sudo ldconfig
-   ldd /usr/local/lib/fcitx5/rime.so | grep "not found"
+   ldd /usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so | grep "not found"
    ```
 2. 确认 rime 共享数据在位：`ls /usr/share/rime-data/`（应有 `default.yaml`、`fcitx5.yaml`）。
 3. 看 fcitx5 / rime 日志定位具体报错。
@@ -74,8 +74,8 @@ package architecture (amd64) does not match system (arm64)
 ## 6. 普通候选正常，但 AI 预测候选不出现
 
 **排查**（按顺序）：
-1. 插件在位：`ls /usr/local/lib/rime-plugins/librime-ai-predict.so`
-2. 模型在位：`ls -lh /usr/local/share/fcitx5-rime/predict_models/zh-base-ct2-int8/model.bin`（约 237M）
+1. 插件在位：`ls /usr/lib/fcitx5-rime-ai/rime-plugins/librime-ai-predict.so`
+2. 模型在位：`ls -lh /usr/share/fcitx5-rime/predict_models/zh-base-ct2-int8/model.bin`（约 237M）
 3. 配置已启用 AI 模块：`~/.local/share/fcitx5/rime/default.custom.yaml` 里有 `'modules/@next': ai_predict`
 4. 配置里 `ai_predict/model_path` 指向模型目录：
    `grep -r model_path ~/.local/share/fcitx5/rime/*.custom.yaml`
@@ -90,7 +90,7 @@ package architecture (amd64) does not match system (arm64)
 **解决**：
 ```bash
 mkdir -p ~/.local/share/fcitx5/rime
-cp -a /usr/local/share/fcitx5-rime/seed/. ~/.local/share/fcitx5/rime/
+cp -a /usr/share/fcitx5-rime/seed/. ~/.local/share/fcitx5/rime/
 ```
 然后 `fcitx5 -r` 重启。
 
@@ -109,14 +109,14 @@ dpkg -l | grep fcitx5-rime
 
 # 依赖是否解析（有 not found 就是有问题）
 sudo ldconfig
-ldd /usr/local/lib/fcitx5/rime.so                    | grep "not found"
-ldd /usr/local/lib/librime.so.1.16.1                 | grep "not found"
-ldd /usr/local/lib/rime-plugins/librime-ai-predict.so | grep "not found"
+ldd /usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so                    | grep "not found"
+ldd /usr/lib/fcitx5-rime-ai/librime.so.1.17.0                 | grep "not found"
+ldd /usr/lib/fcitx5-rime-ai/rime-plugins/librime-ai-predict.so | grep "not found"
 
 # 关键文件是否在位
-ls /usr/local/lib/fcitx5/rime.so \
-   /usr/local/lib/rime-plugins/librime-ai-predict.so
-ls -lh /usr/local/share/fcitx5-rime/predict_models/zh-base-ct2-int8/model.bin
+ls /usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so \
+   /usr/lib/fcitx5-rime-ai/rime-plugins/librime-ai-predict.so
+ls -lh /usr/share/fcitx5-rime/predict_models/zh-base-ct2-int8/model.bin
 
 # 重启 fcitx5
 fcitx5 -r

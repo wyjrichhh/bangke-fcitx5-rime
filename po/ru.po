@@ -68,15 +68,15 @@ msgstr "Модули"
 msgid "Plugins"
 msgstr "Плагины"
 
-#: src/rimeengine.cpp:378 src/rime.conf.in:3 src/rime-addon.conf.in.in:3
+#: src/rimeengine.cpp:378 src/rime-ai.conf.in:3 src/rime-ai-addon.conf.in.in:3
 msgid "Rime"
 msgstr "Rime"
 
-#: src/rime-addon.conf.in.in:4
+#: src/rime-ai-addon.conf.in.in:4
 msgid "Rime Wrapper For Fcitx"
 msgstr "Обертка Rime для Fcitx"
 
-#: org.fcitx.Fcitx5.Addon.Rime.metainfo.xml.in:7
+#: org.fcitx.Fcitx5.Addon.RimeAi.metainfo.xml.in:7
 msgid "Rime for Fcitx 5"
 msgstr "Rime для Fcitx 5"
 
@@ -84,7 +84,7 @@ msgstr "Rime для Fcitx 5"
 msgid "Rime has encountered an error. See /tmp/rime.fcitx.ERROR for details."
 msgstr "Обнаружена ошибка Rime. Подробности в файле /tmp/rime.fcitx.ERROR."
 
-#: org.fcitx.Fcitx5.Addon.Rime.metainfo.xml.in:8
+#: org.fcitx.Fcitx5.Addon.RimeAi.metainfo.xml.in:8
 msgid "Rime input method"
 msgstr "Метод ввода Rime"
 

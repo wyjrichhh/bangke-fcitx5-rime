@@ -8,7 +8,7 @@
 #include <QTextStream>
 
 namespace {
-constexpr const char* kImName = "rime";
+constexpr const char* kImName = "rime-ai";
 
 QString profilePath() {
   QString cfgHome =

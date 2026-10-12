@@ -225,7 +225,7 @@ void MainWindow::saveAndDeploy() {
   // 对正在运行的插件无效 —— 必须用 SetConfig 推过去，改完即生效（否则用户要重启）。
   QStringList pushErrors;
   const QString rimeError = RimeDeploy::setAddonConfig(
-      QStringLiteral("rime"),
+      QStringLiteral("rime-ai"),
       {{QStringLiteral("PreeditInApplication"), data_.preeditInApp}});
   if (!rimeError.isEmpty()) pushErrors << rimeError;
   // 不启用「跟随系统深色」（UseDarkTheme=False，DarkTheme 指回同一个主题）。

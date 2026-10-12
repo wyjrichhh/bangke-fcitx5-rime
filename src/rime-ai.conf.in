@@ -1,7 +1,7 @@
 [InputMethod]
-Name=Rime
+Name=蚌壳拼音
 Icon=fcitx-rime
-Label=ㄓ
+Label=蚌
 LangCode=zh
-Addon=rime
+Addon=rime-ai
 Configurable=True

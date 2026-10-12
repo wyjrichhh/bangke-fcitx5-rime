@@ -38,7 +38,7 @@ struct RimeData {
   // 值：commit_code / commit_text / inline_ascii / clear / noop。
   QString shiftLAction = QStringLiteral("commit_code");
   QString shiftRAction = QStringLiteral("commit_code");
-  // 在应用内显示拼音预编辑（fcitx5 addon 配置 rime.conf 的 PreeditInApplication；
+  // 在应用内显示拼音预编辑（fcitx5 addon 配置 rime-ai.conf 的 PreeditInApplication；
   // 关闭后拼音改在候选框顶部显示）。
   bool preeditInApp = true;
   // 候选词后的 [拼音] 注释（schema 的 translator/spelling_hints）。
@@ -56,7 +56,7 @@ struct RimeData {
 class YamlConfig {
  public:
   static QString rimeUserDir();
-  // 品牌名：读 fcitx5 注册的 IM 名（inputmethod/rime.conf 的 Name=），
+  // 品牌名：读 fcitx5 注册的 IM 名（inputmethod/rime-ai.conf 的 Name=），
   // 打包脚本改这一个 conf 即全局改名，二进制无需重编。
   static QString brandName();
   static RimeData load();

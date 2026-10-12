@@ -75,7 +75,7 @@ public:
     const Configuration *getConfig() const override { return &config_; }
     void setConfig(const RawConfig &config) override {
         config_.load(config, true);
-        safeSaveAsIni(config_, "conf/rime.conf");
+        safeSaveAsIni(config_, "conf/rime-ai.conf");
         updateConfig();
     }
     void setSubConfig(const std::string &path, const RawConfig &) override;

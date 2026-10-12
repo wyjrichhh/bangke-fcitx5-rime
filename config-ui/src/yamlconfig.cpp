@@ -307,7 +307,7 @@ QString YamlConfig::rimeUserDir() {
 
 QString YamlConfig::brandName() {
   // 打包脚本会 sed 这个文件的 Name=（见 repack 脚本的 IM_NAME）。
-  QFile f("/usr/share/fcitx5/inputmethod/rime.conf");
+  QFile f("/usr/share/fcitx5/inputmethod/rime-ai.conf");
   if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
     QTextStream in(&f);
     while (!in.atEnd()) {
@@ -324,7 +324,7 @@ QString rimeAddonConfPath() {
   QString cfgHome =
       QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
   if (cfgHome.isEmpty()) cfgHome = QDir::homePath() + "/.config";
-  return cfgHome + "/fcitx5/conf/rime.conf";
+  return cfgHome + "/fcitx5/conf/rime-ai.conf";
 }
 
 bool readIniBool(const QString& path, const QString& key, bool fallback) {

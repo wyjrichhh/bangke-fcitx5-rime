@@ -66,15 +66,15 @@ msgstr ""
 msgid "Plugins"
 msgstr ""
 
-#: src/rimeengine.cpp:378 src/rime.conf.in:3 src/rime-addon.conf.in.in:3
+#: src/rimeengine.cpp:378 src/rime-ai.conf.in:3 src/rime-ai-addon.conf.in.in:3
 msgid "Rime"
 msgstr "中州韻"
 
-#: src/rime-addon.conf.in.in:4
+#: src/rime-ai-addon.conf.in.in:4
 msgid "Rime Wrapper For Fcitx"
 msgstr "Fcitx 的中州韻封裝"
 
-#: org.fcitx.Fcitx5.Addon.Rime.metainfo.xml.in:7
+#: org.fcitx.Fcitx5.Addon.RimeAi.metainfo.xml.in:7
 msgid "Rime for Fcitx 5"
 msgstr "Fcitx 5 的中州韻支援"
 
@@ -82,7 +82,7 @@ msgstr "Fcitx 5 的中州韻支援"
 msgid "Rime has encountered an error. See /tmp/rime.fcitx.ERROR for details."
 msgstr "Rime 遇到了一個錯誤。見 /tmp/rime.fcitx.ERROR 以取得更多資訊。"
 
-#: org.fcitx.Fcitx5.Addon.Rime.metainfo.xml.in:8
+#: org.fcitx.Fcitx5.Addon.RimeAi.metainfo.xml.in:8
 msgid "Rime input method"
 msgstr "Rime 輸入法"
 

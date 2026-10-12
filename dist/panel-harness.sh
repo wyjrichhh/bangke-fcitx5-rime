@@ -43,10 +43,10 @@ cat > "$HOME_DIR/.config/fcitx5/profile" <<'PROFILE'
 [Groups/0]
 Name=Default
 Default Layout=us
-DefaultIM=rime
+DefaultIM=rime-ai
 
 [Groups/0/Items/0]
-Name=rime
+Name=rime-ai
 Layout=
 
 [Groups/0/Items/1]

@@ -54,8 +54,8 @@ QStringList shiftValues() {
 
 QString addonVersion() {
   for (const QString& path :
-       {QStringLiteral("/usr/share/fcitx5/addon/rime.conf"),
-        QStringLiteral("/usr/local/share/fcitx5/addon/rime.conf")}) {
+       {QStringLiteral("/usr/share/fcitx5/addon/rime-ai.conf"),
+        QStringLiteral("/usr/local/share/fcitx5/addon/rime-ai.conf")}) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
     while (!file.atEnd()) {

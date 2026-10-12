@@ -22,6 +22,32 @@ bool emptyExceptAux(const InputPanel &inputPanel) {
            (!inputPanel.candidateList() ||
             inputPanel.candidateList()->size() == 0);
 }
+
+// 切换输入法时那个气泡（fcitx5 的「简洁输入法信息」默认开着）只显示这个短标签，
+// 一个字符放不下品牌。方案名是「品牌-方案」（蚌壳-雾凇），取每段首字用 '-' 连起来
+// 就得到「蚌-雾」：既是品牌又能认出是哪个方案。没有 '-' 的方案名照旧取首字。
+std::string shortSchemaLabel(const std::string &name) {
+    if (name.empty() || utf8::lengthValidated(name) == utf8::INVALID_LENGTH) {
+        return name;
+    }
+    std::string result;
+    auto iter = name.begin();
+    while (iter != name.end()) {
+        auto next = utf8::nextChar(iter);
+        if (!result.empty()) {
+            result += '-';
+        }
+        result.append(iter, next);
+        iter = next;
+        while (iter != name.end() && *iter != '-') {
+            iter = utf8::nextChar(iter);
+        }
+        if (iter != name.end()) {
+            ++iter;
+        }
+    }
+    return result;
+}
 } // namespace
 
 RimeState::RimeState(RimeEngine *engine, InputContext &ic)
@@ -70,13 +96,7 @@ std::string RimeState::subModeLabel() {
         } else if (status.is_ascii_mode) {
             result = "A";
         } else if (status.schema_name && status.schema_name[0] != '.') {
-            result = status.schema_name;
-            if (!result.empty() &&
-                utf8::lengthValidated(result) != utf8::INVALID_LENGTH) {
-                result = result.substr(
-                    0, std::distance(result.begin(),
-                                     utf8::nextChar(result.begin())));
-            }
+            result = shortSchemaLabel(status.schema_name);
         }
         engine_->api()->free_status(&status);
     }

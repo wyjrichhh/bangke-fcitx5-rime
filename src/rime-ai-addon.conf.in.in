@@ -1,9 +1,9 @@
 [Addon]
-Name=Rime
-Comment=Rime Wrapper For Fcitx
+Name=蚌壳拼音
+Comment=基于 Rime 的蚌壳拼音输入法
 Category=InputMethod
 Version=@PROJECT_VERSION@
-Library=export:rime
+Library=export:rime-ai
 Type=SharedLibrary
 OnDemand=True
 Configurable=True
@@ -14,5 +14,3 @@ Configurable=True
 [Addon/OptionalDependencies]
 0=notifications
 1=dbus
-
-

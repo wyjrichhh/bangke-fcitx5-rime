@@ -93,7 +93,7 @@ librime 1.16.1 是 bleeding-edge，在 Ubuntu 22.04（boost 1.74 / glog 0.5 / cm
 - 5.0.11 **没有** `notifyImmediately`/`currentKeyEventState` → 丢掉同步缓存优化，只保留 `notify()` → `handleReservedProperty` 路径
 - 5.0.11 **没有** `foreachFocused` → 用 `instance_->inputContextManager().foreach(...)` 替代
 - 5.0.11 的候选 comment 是**内联拼进 text**（`text.append(comment, flag)`），不是独立 comment 字段
-- 5.0.11 addon 输出是 `rime.so`（`PREFIX ""`），不是 master 的 `librime.so`
+- addon 输出是 `rime-ai.so`（`PREFIX ""`，addon 名见 `src/CMakeLists.txt`），不是 master 的 `librime.so`
 - 5.0.11 需要给 `RimeState` 加 `session()` getter（原只有私有 `session_`）
 - `po/CMakeLists.txt` 禁用 `fcitx5_install_translation`（gettext 0.21 的 `.mo.rule` bug）
 
@@ -113,12 +113,18 @@ reserved-property 协议本身（`_refresh_ui` / `_comment_highlight` / `_commen
 
 deb 装到哪儿（159 个文件）：
 
-- `/usr/lib/x86_64-linux-gnu/fcitx5/rime.so` —— addon 本体
+- `/usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so` —— addon 本体。addon 名是 `rime-ai`（不是上游的
+  `rime`）：名字同时写死在两个 conf 的文件名、`Library=` 和 profile 的 `Name=` 里，四处必须一致，
+  改名时一起动。已装用户由 postinst / `.INSTALL` 的 `migrate_from_rime` 迁移（profile 条目与
+  `conf/rime.conf`）。
 - `/usr/lib/fcitx5-rime-ai/` —— 捆绑的 17 个 `.so`（librime、ctranslate2、boost_regex、icu×3、yaml-cpp、glog、leveldb、marisa、opencc、snappy、gflags）+ `rime-plugins/librime-ai-predict.so`；`/etc/ld.so.conf.d/fcitx5-rime-ai.conf` 指过去
 - `/usr/bin/fcitx5-rime-config` —— Qt5 设置程序
 - `/usr/share/fcitx5-rime/predict_models/zh-base-ct2-int8/model.bin`（236M）
-- `/usr/local/share/fcitx5/addon/rime.conf`、`/usr/share/fcitx5/inputmethod/rime.conf`
-- postinst 给用户写 `~/.config/fcitx5/profile`（`DefaultIM=rime`）、`classicui.conf`、`~/.local/share/fcitx5/rime/bangke.yaml`、主题 `themes/BangKe/`
+- `/usr/local/share/fcitx5/addon/rime-ai.conf`、`/usr/share/fcitx5/inputmethod/rime-ai.conf` —— addon
+  描述与输入法条目。两条 install 规则的目标目录不同：addon 那条走 `FCITX_INSTALL_PKGDATADIR`
+  （容器里解析成 `/usr/local/share`，Ubuntu 的 fcitx5 会扫 XDG 的 `/usr/local/share`，所以能用；
+  **Arch 的 fcitx5 只扫 `/usr/share`，那边脚本会显式挪过去**）。
+- postinst 给用户写 `~/.config/fcitx5/profile`（`DefaultIM=rime-ai`）、`classicui.conf`、`~/.local/share/fcitx5/rime/bangke.yaml`、主题 `themes/BangKe/`
 
 `Depends: fcitx5, libc6, libstdc++6, libgcc-s1, libqt5widgets5, libqt5dbus5` —— 全新容器里没有 fcitx5 也能装上（安装脚本用 `apt-get -f install` 自动补，实测 22.04/24.04 都过）。
 

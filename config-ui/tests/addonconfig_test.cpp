@@ -25,17 +25,17 @@ static void show(const char* path) {
 
 int main(int argc, char** argv) {
   QCoreApplication app(argc, argv);
-  const char* conf = "/tmp/addonconfig-test-rime.conf";
+  const char* conf = "/tmp/addonconfig-test-rime-ai.conf";
   Q_UNUSED(conf);
 
   std::printf("写 PreeditInApplication=false ...\n");
   const QString e1 = RimeDeploy::setAddonConfig(
-      QStringLiteral("rime"), {{QStringLiteral("PreeditInApplication"), false}});
+      QStringLiteral("rime-ai"), {{QStringLiteral("PreeditInApplication"), false}});
   std::printf("  → %s\n", e1.isEmpty() ? "成功" : qPrintable(e1));
 
   std::printf("写 PreeditInApplication=true ...\n");
   const QString e2 = RimeDeploy::setAddonConfig(
-      QStringLiteral("rime"), {{QStringLiteral("PreeditInApplication"), true}});
+      QStringLiteral("rime-ai"), {{QStringLiteral("PreeditInApplication"), true}});
   std::printf("  → %s\n", e2.isEmpty() ? "成功" : qPrintable(e2));
   return e1.isEmpty() && e2.isEmpty() ? 0 : 1;
 }

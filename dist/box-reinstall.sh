@@ -43,8 +43,8 @@ sudo rm -rf /usr/lib/fcitx5-rime-ai \
             /usr/share/fcitx5-rime \
             /usr/local/share/fcitx5-rime \
             /etc/ld.so.conf.d/fcitx5-rime-ai.conf
-sudo rm -f  /usr/lib/x86_64-linux-gnu/fcitx5/rime.so \
-            /usr/local/lib/fcitx5/rime.so \
+sudo rm -f  /usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so \
+            /usr/local/lib/fcitx5/rime-ai.so \
             /usr/bin/fcitx5-rime-config \
             /usr/share/applications/fcitx5-rime-config.desktop
 sudo ldconfig
@@ -89,7 +89,7 @@ check "候选面板主题（用户）" "$HOME/.local/share/fcitx5/themes/BangKe/
 check "classicui 指向我们的主题" "$HOME/.config/fcitx5/conf/classicui.conf"
 check "配色数据（用户 rime 目录）" "$USER_RIME/bangke.yaml"
 check "设置程序" "/usr/bin/fcitx5-rime-config"
-check "rime addon" "/usr/lib/x86_64-linux-gnu/fcitx5/rime.so"
+check "rime addon" "/usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so"
 check "AI 插件" "/usr/lib/fcitx5-rime-ai/rime-plugins/librime-ai-predict.so"
 check "AI 模型" "/usr/share/fcitx5-rime/predict_models/zh-base-ct2-int8/model.bin"
 missing=$(ldd /usr/lib/fcitx5-rime-ai/rime-plugins/librime-ai-predict.so 2>/dev/null | grep -c 'not found')

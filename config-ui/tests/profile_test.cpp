@@ -29,7 +29,7 @@ static QString profile() {
 }
 // rime 必须出现在 [GroupOrder] 之前（否则会被当成那节的键）
 static bool beforeGroupOrder(const QString& text) {
-  const int rime = text.indexOf("Name=rime");
+  const int rime = text.indexOf("Name=rime-ai");
   const int order = text.indexOf("[GroupOrder]");
   return rime >= 0 && order >= 0 && rime < order;
 }
@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
   // 1) 全新用户：建模板
   ensureRimeInputMethod();
   QString t = read(profile());
-  check(t.contains("Name=rime") && t.contains("DefaultIM=rime"), "全新用户建模板");
+  check(t.contains("Name=rime-ai") && t.contains("DefaultIM=rime-ai"), "全新用户建模板");
   check(beforeGroupOrder(t), "rime 在 [GroupOrder] 之前");
 
   // 2) 幂等
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
   // 4) 已有 rime：一个字都不改
   const QString withRime =
       QStringLiteral("[Groups/0]\nName=Default\n\n[Groups/0/Items/0]\n"
-                     "Name=rime\nLayout=\n\n[GroupOrder]\n0=Default\n");
+                     "Name=rime-ai\nLayout=\n\n[GroupOrder]\n0=Default\n");
   write(profile(), withRime);
   ensureRimeInputMethod();
   check(read(profile()) == withRime, "已有 rime 时完全不动");

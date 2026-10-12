@@ -123,5 +123,5 @@ ninja -C /priv/config-ui/build -j "$(nproc)"
 
 echo "=== 构建完成, 产物 ==="
 ls -l "$SO" /out/lib/libctranslate2.so.4* /out/librime/build/lib/librime.so.1.*
-find /priv/build -name "rime.so"
+find /priv/build -name "rime-ai.so"
 ls -l /priv/config-ui/build/fcitx5-rime-config

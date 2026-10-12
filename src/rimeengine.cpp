@@ -224,7 +224,7 @@ void RimeEngine::rimeStart(bool fullcheck) {
 }
 
 void RimeEngine::reloadConfig() {
-    readAsIni(config_, "conf/rime.conf");
+    readAsIni(config_, "conf/rime-ai.conf");
     updateConfig();
 }
 
@@ -301,8 +301,7 @@ void RimeEngine::updateConfig() {
 }
 void RimeEngine::activate(const InputMethodEntry &entry,
                            InputContextEvent &event) {
-    // 菜单文字跟 IM 注册名走（inputmethod/rime.conf 的 Name=，打包脚本注入），
-    // 改名只需重打包，无需重编 addon。
+    // 菜单文字跟 IM 注册名走（inputmethod/rime-ai.conf 的 Name=），改名不必动这里。
     configAction_.setShortText(entry.name() + " 设置");
     event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
                                                  imAction_.get());
