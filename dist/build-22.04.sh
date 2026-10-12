@@ -76,6 +76,8 @@ else
   rm -rf /out/librime/plugins/librime-ai-predict
   mkdir -p /out/librime/plugins/librime-ai-predict
   cp -a /plugin/. /out/librime/plugins/librime-ai-predict/
+  # 夹带的 AppleDouble（._*）会被当源码编，清一遍。
+  find /out/librime -name '._*' -delete 2>/dev/null || true
   rm -rf /out/librime/plugins/librime-ai-predict/deps \
          /out/librime/plugins/librime-ai-predict/build
   cd /out/librime

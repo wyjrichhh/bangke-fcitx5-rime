@@ -65,6 +65,13 @@ else
   echo "=== [3/7] 构建 librime + 插件 ==="
   rm -rf "$SRC/librime"
   cp -a /librime "$SRC/librime"
+  # 私有库里带着 macOS 侧 `make deps` 的产物：lib/*.a 是 Mach-O 归档，Linux 链接器
+  # 会把它们当依赖去找符号、然后满屏 undefined reference；include/ 下的第三方旧头
+  # 会和系统库 API 对不上。两者都得清掉（Linux 一律用系统库）。
+  rm -rf "$SRC/librime/lib" "$SRC/librime/build"
+  rm -rf "$SRC/librime/include/glog" "$SRC/librime/include/yaml-cpp" \
+         "$SRC/librime/include/leveldb" "$SRC/librime/include/marisa" \
+         "$SRC/librime/include/opencc" "$SRC/librime/include/gtest"
   rm -rf "$SRC/librime/plugins/librime-ai-predict"
   mkdir -p "$SRC/librime/plugins/librime-ai-predict"
   cp -a /plugin/. "$SRC/librime/plugins/librime-ai-predict/"
@@ -75,6 +82,10 @@ else
     rm -rf "$SRC/librime/plugins/${p#librime-}"
     cp -a "/vendor/$p" "$SRC/librime/plugins/${p#librime-}"
   done
+  # 物料是从 Mac 传过去的，可能夹带 AppleDouble（._*）—— 那些二进制头会被当成
+  # 源码编（"stray '\5' in program"）。清一遍，别指望上游保持干净。
+  find "$SRC/librime/plugins" -name '._*' -delete 2>/dev/null || true
+  find "$SRC/librime/plugins" -name '.DS_Store' -delete 2>/dev/null || true
   cd "$SRC/librime"
   rm -rf build
   # 注：这里**不**传 Boost_NO_BOOST_CMAKE —— 那是 Ubuntu 22.04（boost 1.74）的处方，
@@ -133,7 +144,10 @@ cp -a "$PRIV/data/ai-predict-defaults/"*.custom.yaml "$PKG/usr/share/fcitx5-rime
 cp -a /vendor/dicts/.                                "$PKG/usr/share/fcitx5-rime/seed/"
 cp -a /vendor/rime-ice/.                             "$PKG/usr/share/fcitx5-rime/seed/"
 mkdir -p "$PKG/usr/share/fcitx5-rime/predict_models"
-cp -a /vendor/models/*                               "$PKG/usr/share/fcitx5-rime/predict_models/"
+# 只随包默认那个（出厂种子的 model_path 指向它）。多塞一个模型会让包大近一倍，
+# 想试别的模型由设置页的「选择目录…」指过去。
+DEFAULT_MODEL="${DEFAULT_MODEL:-zh-base-ct2-int8}"
+cp -a "/vendor/models/$DEFAULT_MODEL"                "$PKG/usr/share/fcitx5-rime/predict_models/"
 cp -a "$PRIV/data/bangke.yaml"                       "$PKG/usr/share/fcitx5-rime/seed/bangke.yaml"
 mkdir -p "$PKG/usr/share/fonts/truetype/fcitx5-rime"
 cp -a /vendor/fonts/*.ttf /vendor/fonts/*.otf "$PKG/usr/share/fonts/truetype/fcitx5-rime/" 2>/dev/null || true
@@ -150,8 +164,13 @@ chown -R builder "$BUILD"
 cd "$BUILD"
 # 版本号从 PKGBUILD 读，避免两处写死。
 sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
-sudo -u builder makepkg -f --noconfirm
-# 产物交还给挂载目录的主人（容器以 root 写 /out）。
-chown -R "$(stat -c '%U:%G' "$OUT")" "$OUT"
-ls -lh "$OUT"/*.pkg.tar.zst
+# --nodeps：depends 里是**运行期**依赖（qt5-wayland、librime-data 等），打包容器里
+# 不一定装了；它们照常写进包元数据，由目标机器上的 pacman 负责满足。
+sudo -u builder env PKGEXT='.pkg.tar.zst' makepkg -f --noconfirm --nodeps
+# 包挪到 /out 顶层（makepkg 落在它的构建目录里），其余中间产物留在 $BUILD。
+mv "$BUILD"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+# 产物交还给挂载目录的主人（容器以 root 写 /out）。中间产物里有 .git 的 pack 文件
+# 属于别的用户，chown 会报错 —— 与出包无关，别让它掀掉整个脚本。
+chown -R "$(stat -c '%U:%G' "$OUT")" "$OUT" 2>/dev/null || true
+ls -lh "$OUT"/*.pkg.tar.*
 echo "=== 完成 ==="
