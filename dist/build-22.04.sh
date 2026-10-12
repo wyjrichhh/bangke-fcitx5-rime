@@ -86,6 +86,7 @@ else
   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
     -DBUILD_SHARED_LIBS=ON -DBUILD_MERGED_PLUGINS=OFF -DENABLE_EXTERNAL_PLUGINS=ON \
     -DBUILD_TEST=OFF -DBUILD_SAMPLE=OFF -DCTRANSLATE2_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
     -DLUA_VERSION=lua5.4 "${CMAKE_OLD_POLICY[@]}"
   ninja -C build -j "$(nproc)"
   cmake --install build

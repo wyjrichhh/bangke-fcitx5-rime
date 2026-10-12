@@ -1,0 +1,35 @@
+# 蚌壳拼音（Arch 线）的打包配方。
+#
+# 这里只做「打包」，不重复编译 —— 编译由 dist/build-arch-aarch64.sh 在容器里做完，
+# 把组好的安装树放到本目录下的 bangke-pkg/（脚本会连 PKGBUILD 一起拷进构建目录）。
+#
+# 与 Ubuntu 线的对应关系：deb 侧是 repack-container.sh 组树 + dpkg-deb；这里是
+# makepkg。两边都从同一批来源取件：私有库（私有代码与种子）+ ~/bangke/vendor（大件）。
+#
+# 用法（由 build-arch-aarch64.sh 调用）：
+#     makepkg -f      → bangke-pinyin-<版本>-<arch>.pkg.tar.zst
+#     sudo pacman -U bangke-pinyin-*.pkg.tar.zst
+pkgname=bangke-pinyin
+pkgver=5.0.12
+pkgrel=1
+pkgdesc='蚌壳拼音 —— 基于 Rime 的 fcitx5 输入法（含 CTranslate2 AI 预测）'
+arch=('aarch64' 'x86_64')
+url='https://bangke.ai'
+license=('BSD')
+# 运行期依赖。第三方 .so 不随包分发（Arch 由 pacman 保证版本），所以这里必须列全：
+# librime-data 是引擎数据，qt5-wayland 让设置程序在 Wayland 会话下能起来。
+depends=('fcitx5' 'qt5-base' 'qt5-wayland' 'librime-data' 'google-glog' 'yaml-cpp'
+         'gflags' 'leveldb' 'marisa' 'opencc' 'lua')
+optdepends=('noto-fonts-cjk: 面板中文字体（包内已带两款，这是额外兜底）')
+# 装/卸的维护逻辑全在这一个文件里：装完铺种子、注册输入法、按需生成主题；
+# 卸载时对称回收（我们注册的条目、我们生成的面板配置）。
+install=bangke-pinyin.install
+
+# 没有远端来源：安装树是调用方组好放在 $startdir/bangke-pkg 的。
+source=()
+options=('!emptydirs')
+
+package() {
+  cp -a "$startdir/bangke-pkg/usr" "$pkgdir/"
+  cp -a "$startdir/bangke-pkg/etc" "$pkgdir/"
+}
