@@ -132,7 +132,25 @@ ln -sf "$RIME_SO" "$PKG/usr/lib/fcitx5-rime-ai/librime.so.1"
 ln -sf librime.so.1 "$PKG/usr/lib/fcitx5-rime-ai/librime.so"
 # 四个插件一起装：rime_ice 依赖 lua，缺了会刷上百条 error creating translator。
 cp "$SRC/librime/build/lib/rime-plugins/"*.so       "$PKG/usr/lib/fcitx5-rime-ai/rime-plugins/"
-cp "$PRIV/config-ui/build/fcitx5-rime-config"       "$PKG/usr/bin/"
+
+# addon 与设置程序的**数据文件**（/usr/share/fcitx5/addon/rime.conf、inputmethod/rime.conf、
+# desktop、图标…）走各自的 cmake install 规则 —— 缺了 addon conf，fcitx5 根本不知道有
+# 这个输入法：装包不报错，但重启后切不出来。（Ubuntu 线一直是用 install 拿的这些。）
+DESTDIR="$PKG" cmake --install "$PRIV/build" --prefix /usr
+DESTDIR="$PKG" cmake --install "$PRIV/config-ui/build" --prefix /usr
+
+# addon 描述文件由 src/rime-addon.conf.in.in 生成，装到 ${FCITX_INSTALL_PKGDATADIR}/addon
+# —— 那个变量在容器里会解析成 /usr/local/share/fcitx5，而 fcitx5 在 Arch 上只扫
+# /usr/share/fcitx5。**这是最初「装完切不出输入法」的根因**：文件在，但位置不对，
+# fcitx5 压根不知道有 rime 这个 addon。挪到它认的位置，别留 /usr/local 那棵树。
+if [ -f "$PKG/usr/local/share/fcitx5/addon/rime.conf" ]; then
+  mkdir -p "$PKG/usr/share/fcitx5/addon"
+  mv "$PKG/usr/local/share/fcitx5/addon/rime.conf" "$PKG/usr/share/fcitx5/addon/rime.conf"
+fi
+rm -rf "$PKG/usr/local"
+
+# config-ui 的 install 规则不装二进制，显式放进去。
+cp "$PRIV/config-ui/build/fcitx5-rime-config" "$PKG/usr/bin/"
 
 # Arch 的库目录是 /usr/lib；addon 的 conf 也必须落在 /usr/share/fcitx5 ——
 # deb 用的 /usr/local/share 在 Arch 上扫不到（实测 fcitx5-diagnose 数不到 Rime）。
