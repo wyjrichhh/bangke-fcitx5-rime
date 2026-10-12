@@ -20,8 +20,12 @@ license=('BSD')
 # librime-data 是引擎数据，qt5-wayland 让设置程序在 Wayland 会话下能起来。
 # boost 必须有：librime 与 addon 都链 libboost_filesystem，缺了 addon 直接加载不了
 # （实测表现：fcitx5 里能列出条目但标「不可用」）。
-depends=('fcitx5' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost' 'google-glog' 'yaml-cpp'
-         'gflags' 'leveldb' 'marisa' 'opencc' 'lua')
+# **要的是 boost-libs 不是 boost**：Arch 把 boost 拆成两个包 —— `boost` 只有头文件
+# （`pacman -Ql boost` 里一个 .so 都没有），共享库在 `boost-libs`。声明错的那个，
+# 装完系统里照样没有 libboost_filesystem.so.*，加载还是失败。Debian 系没这问题，
+# 一个 libboost-filesystem-dev 全给。
+depends=('fcitx5' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost-libs' 'google-glog'
+         'yaml-cpp' 'gflags' 'leveldb' 'marisa' 'opencc' 'lua')
 optdepends=('noto-fonts-cjk: 面板中文字体（包内已带两款，这是额外兜底）')
 # 装/卸的维护逻辑全在这一个文件里：装完铺种子、注册输入法、按需生成主题；
 # 卸载时对称回收（我们注册的条目、我们生成的面板配置）。
