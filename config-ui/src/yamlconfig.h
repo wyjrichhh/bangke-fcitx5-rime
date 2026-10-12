@@ -9,6 +9,7 @@
 // AI 预测的可配置项（对应 rime 配置里 ai_predict: 块下的键）。
 struct AISettings {
   bool enabled = true;
+  bool filterPunctuation = true;
   QString modelPath;
   int minInputLength = 12;
   int minContextPromptLength = 2;
@@ -16,7 +17,6 @@ struct AISettings {
   int debounceMs = 200;
   int maxTokens = 64;
   QString device = "cpu";  // 插件只认 cpu / cuda（见 ct2_backend.cc）
-  double quality = -1.0;
   int minHanzi = 2;
   int targetIndex = 1;
   int searchRange = 10;

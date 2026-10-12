@@ -94,17 +94,20 @@ class AiPage : public PageScaffold {
 
  private:
   ToggleRow* enabled_ = nullptr;
+  ToggleRow* filterPunctuation_ = nullptr;
   ComboRow* device_ = nullptr;
   SliderRow* targetIndex_ = nullptr;
   SliderRow* maxTokens_ = nullptr;
   SliderRow* debounce_ = nullptr;
   SliderRow* minInput_ = nullptr;
   SliderRow* minHanzi_ = nullptr;
-  SliderRow* quality_ = nullptr;
   SliderRow* searchRange_ = nullptr;
   SliderRow* contextWindow_ = nullptr;
   SliderRow* minContextPrompt_ = nullptr;
+  QLabel* modelPathLabel_ = nullptr;
   QString modelPath_;
+  void updateModelPathLabel();
+  void pickModelDir();
 };
 
 // 方案与词典页（mac 上没有这一页 —— mac 把它放在菜单栏里；Linux 需要有入口）。

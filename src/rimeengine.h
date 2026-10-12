@@ -111,6 +111,16 @@ private:
                 const std::string &value);
     void handleReservedProperty(RimeSessionId session,
                                 std::string_view messageValue);
+    // 插件自有键空间（ai_predict/*）。返回 true 表示这条通知已被消费。
+    bool handlePluginProperty(RimeSessionId session,
+                              std::string_view messageValue);
+    // AI 插件的推理在后台线程跑，跑完只落缓存、不碰 Context；把候选浮出来是
+    // 前端的事。pending 置位期间按 mac 侧的时序反复轻推一次重排，直到结果
+    // 进缓存或超时（见 rimeengine.cpp）。
+    void pumpAIPrediction(RimeSessionId session);
+    void scheduleAIPumpTick();
+    void nudgeComposition(RimeSessionId session);
+    bool isAIPredictionPending(RimeSessionId session) const;
     static void applyReservedPropertyState(RimeState &state,
                                            std::string_view key,
                                            std::string_view value);
@@ -139,6 +149,15 @@ private:
     std::unordered_map<std::string, Library> pluginPool_;
 #endif
     std::unique_ptr<EventSourceTime> timeEvent_;
+
+    // AI 推理泵。一次只有一个会话在泵上：输入法同一时刻只在一个 IC 里组合。
+    // aiPumpRunning_ 与指针分开记：回调返回 false 之后事件源已从循环摘除，
+    // 但指针还持有它（不能在回调里自我销毁），靠这个标志判断还能不能起新的。
+    std::unique_ptr<EventSourceTime> aiPumpEvent_;
+    bool aiPumpRunning_ = false;
+    RimeSessionId aiPumpSession_ = 0;
+    uint64_t aiPumpInterval_ = 0; // 当前拍的间隔，逐拍翻倍退避
+    uint64_t aiPumpDeadline_ = 0;
 
     RimeService service_{this};
 };

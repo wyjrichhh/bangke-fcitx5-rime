@@ -2,11 +2,14 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -292,6 +295,12 @@ void BehaviorPage::collect(RimeData* data) const {
 
 // ── 智能联想页 ───────────────────────────────────────────────────
 
+namespace {
+// 随包分发的默认模型（与出厂种子 ai-predict-defaults 里的 model_path 一致）。
+constexpr const char* kDefaultModelPath =
+    "/usr/share/fcitx5-rime/predict_models/zh-base-ct2-int8";
+} // namespace
+
 AiPage::AiPage(const RimeData& data, QWidget* parent)
     : PageScaffold(QStringLiteral("智能联想"),
                    QStringLiteral("AI 预测候选（对两个内置方案同时生效）"), parent) {
@@ -329,6 +338,12 @@ AiPage::AiPage(const RimeData& data, QWidget* parent)
   addRow(minContextPrompt_);
 
   addSection(QStringLiteral("展示与去重"));
+  filterPunctuation_ = new ToggleRow(
+      QStringLiteral("过滤标点"),
+      QStringLiteral("剥掉模型输出里的标点。关掉可保留模型自己吐出的句读"
+                     "（如「，我们」），代价是上下文复读的标点残留也会进候选。"),
+      ai.filterPunctuation, this);
+  addRow(filterPunctuation_);
   targetIndex_ = new SliderRow(
       QStringLiteral("候选插入位置"),
       QStringLiteral("AI 候选插在常规候选的第几位（0 = 最前）。"), 0, 20, 1,
@@ -340,20 +355,72 @@ AiPage::AiPage(const RimeData& data, QWidget* parent)
   maxTokens_ = new SliderRow(QStringLiteral("最大 token 数"), QString(), 8, 512, 8,
                              ai.maxTokens, QString(), this);
   addRow(maxTokens_);
-  quality_ = new SliderRow(QStringLiteral("候选质量阈值"),
-                           QStringLiteral("低于该分数的候选丢弃；-1 表示不过滤。"),
-                           -1.0, 100.0, 0.1, ai.quality, QString(), this);
-  addRow(quality_);
 
   addSection(QStringLiteral("模型"));
-  addWidget(new QLabel(modelPath_.isEmpty() ? QStringLiteral("（未配置模型路径）")
-                                            : modelPath_));
+  auto* modelRow = new QWidget(this);
+  auto* modelLay = new QHBoxLayout(modelRow);
+  modelLay->setContentsMargins(0, 0, 0, 0);
+  modelPathLabel_ = new QLabel(modelRow);
+  modelPathLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  modelLay->addWidget(modelPathLabel_, 1);
+  auto* pickBtn = new QPushButton(QStringLiteral("选择目录…"), modelRow);
+  auto* resetBtn = new QPushButton(QStringLiteral("恢复默认"), modelRow);
+  modelLay->addWidget(pickBtn);
+  modelLay->addWidget(resetBtn);
+  addWidget(modelRow);
+  updateModelPathLabel();
+  connect(pickBtn, &QPushButton::clicked, this, [this] { pickModelDir(); });
+  connect(resetBtn, &QPushButton::clicked, this, [this] {
+    modelPath_ = QString::fromLatin1(kDefaultModelPath);
+    updateModelPathLabel();
+  });
 
+}
+
+void AiPage::updateModelPathLabel() {
+  if (!modelPathLabel_) {
+    return;
+  }
+  modelPathLabel_->setText(modelPath_.isEmpty()
+                               ? QStringLiteral("（未配置模型路径）")
+                               : modelPath_);
+}
+
+void AiPage::pickModelDir() {
+  const QString start = modelPath_.isEmpty() ? QDir::homePath() : modelPath_;
+  const QString dir = QFileDialog::getExistingDirectory(
+      this, QStringLiteral("选择模型目录"), start);
+  if (dir.isEmpty()) {
+    return; // 用户取消
+  }
+  // 预检：插件要求目录成套，缺件会在启动时直接关掉 AI 预测。先拦住，别让用户
+  // 存进一个必然失败的路径（错误信息要好懂，不是让他去看日志）。
+  const QStringList need{QStringLiteral("model.bin"),
+                         QStringLiteral("tokenizer.json"),
+                         QStringLiteral("shared_vocabulary.json")};
+  QStringList missing;
+  for (const QString& f : need) {
+    if (!QFile::exists(dir + QLatin1Char('/') + f)) {
+      missing << f;
+    }
+  }
+  if (!missing.isEmpty()) {
+    QMessageBox::warning(
+        this, QStringLiteral("模型目录不完整"),
+        QStringLiteral("这个目录里缺少：%1\n\n模型目录必须成套 —— model.bin、"
+                       "tokenizer.json、shared_vocabulary.json 三者要来自同一个模型。")
+            .arg(missing.join(QStringLiteral("、"))));
+    return;
+  }
+  modelPath_ = dir;
+  updateModelPathLabel();
 }
 
 void AiPage::collect(RimeData* data) const {
   AISettings& ai = data->ai;
+  ai.modelPath = modelPath_;
   ai.enabled = enabled_->isChecked();
+  ai.filterPunctuation = filterPunctuation_->isChecked();
   ai.device = device_->currentValue();
   ai.debounceMs = int(debounce_->value());
   ai.minInputLength = int(minInput_->value());
@@ -363,7 +430,6 @@ void AiPage::collect(RimeData* data) const {
   ai.targetIndex = int(targetIndex_->value());
   ai.searchRange = int(searchRange_->value());
   ai.maxTokens = int(maxTokens_->value());
-  ai.quality = quality_->value();
 }
 
 // ── 方案与词典页 ─────────────────────────────────────────────────

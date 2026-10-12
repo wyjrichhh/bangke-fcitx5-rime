@@ -149,6 +149,8 @@ RimeEngine::RimeEngine(Instance *instance)
 }
 
 RimeEngine::~RimeEngine() {
+    // 泵的回调要碰 api_，必须先摘掉再 finalize。
+    aiPumpEvent_.reset();
     factory_.unregister();
     try {
         if (api_) {
@@ -387,7 +389,10 @@ void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
             message = _("Simplified Chinese is enabled.");
         }
     } else if (messageType == "property") {
-        handleReservedProperty(session, messageValue);
+        // 插件自有键空间先认，认不出来再走保留键协议（后者只认 "_" 前缀）。
+        if (!handlePluginProperty(session, messageValue)) {
+            handleReservedProperty(session, messageValue);
+        }
     }
 
     auto notifications = this->notifications();
@@ -446,6 +451,104 @@ void RimeEngine::handleReservedProperty(RimeSessionId session,
             }
             return true;
         });
+}
+
+namespace {
+
+// 与 mac 侧（BangkeInputController.pumpAIPrediction）同一套时序。间隔取推理
+// 时间量级的一个零头：太密等于拿 Compose 当轮询使，太疏则候选浮出来时用户
+// 已经按了下一个键，白白多推一轮。
+constexpr uint64_t kAIPumpInterval = 150000;    // 150ms：第一拍，趁推理多半还没回来
+constexpr uint64_t kAIPumpIntervalMax = 600000; // 退避上限
+constexpr uint64_t kAIPumpTimeout = 3000000;    // 3s
+
+} // namespace
+
+bool RimeEngine::handlePluginProperty(RimeSessionId session,
+                                      std::string_view messageValue) {
+    constexpr std::string_view key = reservedproperty::kAIPredictPending;
+    if (messageValue.size() <= key.size() ||
+        messageValue.compare(0, key.size(), key) != 0 ||
+        messageValue[key.size()] != '=') {
+        return false;
+    }
+    // 只有置位才起泵；清空表示这一轮已经了结，泵自己会在下一拍停下来。
+    if (messageValue.substr(key.size() + 1) == "1") {
+        pumpAIPrediction(session);
+    }
+    return true;
+}
+
+bool RimeEngine::isAIPredictionPending(RimeSessionId session) const {
+    char buffer[16] = {};
+    // string_view 由字面量构造，data() 后面就是那个 NUL。
+    if (!api_ || !api_->get_property(session,
+                                     reservedproperty::kAIPredictPending.data(),
+                                     buffer, sizeof(buffer) - 1)) {
+        return false;
+    }
+    return std::string_view(buffer) == "1";
+}
+
+void RimeEngine::pumpAIPrediction(RimeSessionId session) {
+    aiPumpSession_ = session;
+    aiPumpDeadline_ = now(CLOCK_MONOTONIC) + kAIPumpTimeout;
+    if (aiPumpRunning_) {
+        // 已经在泵上：只把截止时间往后延，别叠第二个事件源。
+        return;
+    }
+    aiPumpRunning_ = true;
+    // 上一轮停下的那个事件源还挂在成员上，这里换掉它（此刻不在它的回调里）。
+    aiPumpEvent_.reset();
+    scheduleAIPumpTick();
+}
+
+void RimeEngine::scheduleAIPumpTick() {
+    aiPumpEvent_ = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + aiPumpInterval_, 0,
+        [this](EventSourceTime *source, uint64_t) {
+            const bool pend = isAIPredictionPending(aiPumpSession_);
+            if (!pend || now(CLOCK_MONOTONIC) >= aiPumpDeadline_) {
+                aiPumpRunning_ = false;
+                return false; // 摘掉事件源；不能在这里 reset 成员（自我销毁）
+            }
+            nudgeComposition(aiPumpSession_);
+            // 退避：每拍翻倍（有上限）。每拍都是一次完整 Compose，长拼音串很贵；
+            // 推理通常 100-400ms 就回来，多数情况一两拍就够，剩下的拍纯属白烧。
+            aiPumpInterval_ = aiPumpInterval_ < kAIPumpIntervalMax / 2
+                                  ? aiPumpInterval_ * 2
+                                  : kAIPumpIntervalMax;
+            // fcitx5 的 addTimeEvent 是**一次性**的：回调返回 true 并不会让它重复
+            // （setTime / setNextInterval 都试过，照样只响一次）。所以在事件循环里
+            // 重新挂下一拍 —— 不能在回调里销毁自己，先 return false 让当前这个退场，
+            // 由那个延迟的任务换掉成员并挂新的。
+            eventDispatcher_.schedule([this] {
+                aiPumpEvent_.reset();
+                scheduleAIPumpTick();
+            });
+            return false;
+        });
+}
+
+void RimeEngine::nudgeComposition(RimeSessionId session) {
+    // 重设一个本 addon 从不使用的 option：Context::set_option 即使新旧同值也
+    // 一定发通知，而 ConcreteEngine::OnOptionUpdate 在 composing 时会
+    // RefreshNonConfirmedComposition() —— 那次重排会重跑 Query，缓存里已经有
+    // 结果就把 AI 候选交出来，同时把 pending 清掉，泵下一拍自然停。mac 用
+    // soft_cursor 同理。
+    api_->set_option(session, "soft_cursor",
+                     api_->get_option(session, "soft_cursor"));
+    instance_->inputContextManager().foreach([this, session](InputContext *ic) {
+        if (auto *state = this->state(ic)) {
+            if (state->session() == session) {
+                // 异步刷新：不清面板、不清注释（见 rimestate.h）。
+                state->updateUI(ic, /*keyRelease=*/false,
+                                /*clearReservedComments=*/false,
+                                /*resetPanel=*/false);
+            }
+        }
+        return true;
+    });
 }
 
 void RimeEngine::applyReservedPropertyState(RimeState &state,

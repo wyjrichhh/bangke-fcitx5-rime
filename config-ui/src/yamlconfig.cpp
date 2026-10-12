@@ -404,13 +404,12 @@ RimeData YamlConfig::load() {
   ai.minHanzi = toInt("min_hanzi", ai.minHanzi);
   ai.targetIndex = toInt("target_index", ai.targetIndex);
   ai.searchRange = toInt("search_range", ai.searchRange);
-  bool b = false;
-  double q = get("quality").toDouble(&b);
-  if (b) ai.quality = q;
   QString dev = get("device");
   if (!dev.isEmpty()) ai.device = dev;
   QString en = get("enabled");
   if (en == "false" || en == "0") ai.enabled = false;
+  QString fp = get("filter_punctuation");
+  if (fp == "false" || fp == "0") ai.filterPunctuation = false;
 
   return data;
 }
@@ -455,7 +454,12 @@ bool YamlConfig::save(const RimeData& data) {
 
     if (kKnownSchemas.contains(s.name)) {
       const AISettings& ai = data.ai;
+      if (!ai.modelPath.isEmpty()) {
+        setScalarInBlock(sc, "ai_predict", "model_path", ai.modelPath);
+      }
       setScalarInBlock(sc, "ai_predict", "enabled", ai.enabled ? "true" : "false");
+      setScalarInBlock(sc, "ai_predict", "filter_punctuation",
+                       ai.filterPunctuation ? "true" : "false");
       setScalarInBlock(sc, "ai_predict", "device", ai.device);
       setScalarInBlock(sc, "ai_predict", "max_tokens", QString::number(ai.maxTokens));
       setScalarInBlock(sc, "ai_predict", "debounce_ms", QString::number(ai.debounceMs));
@@ -465,7 +469,6 @@ bool YamlConfig::save(const RimeData& data) {
       setScalarInBlock(sc, "ai_predict", "context_window_size",
                        QString::number(ai.contextWindowSize));
       setScalarInBlock(sc, "ai_predict", "min_hanzi", QString::number(ai.minHanzi));
-      setScalarInBlock(sc, "ai_predict", "quality", QString::number(ai.quality));
       setScalarInBlock(sc, "ai_predict", "target_index", QString::number(ai.targetIndex));
       setScalarInBlock(sc, "ai_predict", "search_range", QString::number(ai.searchRange));
       // 自学习（用户词典/自动调频）按方案独立。

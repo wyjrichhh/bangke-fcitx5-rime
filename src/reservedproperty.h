@@ -22,6 +22,11 @@ inline constexpr std::string_view kRefreshUI = "_refresh_ui";
 inline constexpr std::string_view kCommentHighlight = "_comment_highlight";
 inline constexpr std::string_view kCommentWarning = "_comment_warning";
 
+// AI 插件自己的键空间，刻意不带 "_" 前缀 —— 它镜像的是 schema 里的配置键名，
+// 不是这份跨前端协议的一部分。值 "1" 表示有一次推理在途，结果还没落进缓存。
+// 同样靠 "property" 通知送达，所以 splitKeyValue() 之外要单独认一次。
+inline constexpr std::string_view kAIPredictPending = "ai_predict/pending";
+
 // Splits a "property" notification value at the first '='. Returns the
 // (key, value) pair only when the key lives in the reserved "_" namespace.
 inline std::optional<std::pair<std::string_view, std::string_view>>
