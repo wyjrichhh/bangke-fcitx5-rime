@@ -518,6 +518,9 @@ void RimeEngine::pumpAIPrediction(RimeSessionId session) {
         return;
     }
     aiPumpRunning_ = true;
+    // 起点必须是 kAIPumpInterval：它是逐拍翻倍的，起点为 0 就永远退避不出去，
+    // 变成 0 延迟空转 —— 事件循环被占满，UI 更新送不到客户端（上屏后预编辑区不清）。
+    aiPumpInterval_ = kAIPumpInterval;
     // 上一轮停下的那个事件源还挂在成员上，这里换掉它（此刻不在它的回调里）。
     aiPumpEvent_.reset();
     scheduleAIPumpTick();
@@ -535,8 +538,13 @@ void RimeEngine::scheduleAIPumpTick() {
             nudgeComposition(aiPumpSession_);
             // 退避：每拍翻倍（有上限）。每拍都是一次完整 Compose，长拼音串很贵；
             // 推理通常 100-400ms 就回来，多数情况一两拍就够，剩下的拍纯属白烧。
-            aiPumpInterval_ = aiPumpInterval_ < kAIPumpIntervalMax / 2
-                                  ? aiPumpInterval_ * 2
+            // 下限兜底：间隔一旦为 0，这个循环退避不出去（见 pumpAIPrediction）。
+            uint64_t nextInterval = aiPumpInterval_ * 2;
+            if (nextInterval < kAIPumpInterval) {
+                nextInterval = kAIPumpInterval;
+            }
+            aiPumpInterval_ = nextInterval < kAIPumpIntervalMax
+                                  ? nextInterval
                                   : kAIPumpIntervalMax;
             // fcitx5 的 addTimeEvent 是**一次性**的：回调返回 true 并不会让它重复
             // （setTime / setNextInterval 都试过，照样只响一次）。所以在事件循环里

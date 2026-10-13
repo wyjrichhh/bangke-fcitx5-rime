@@ -57,19 +57,22 @@
 
 1. **`build-22.04.sh`** —— 容器内 5 步：装依赖 → 构建 CTranslate2 → librime+插件 → fcitx5-rime → **config-ui（Qt5）**。`SKIP_LIBRIME=1` 复用 `/src/librime/build` 里已有的 librime 产物（只改了私有代码时用，省十几分钟）
 2. **`repack-container.sh`** —— 容器内：staging 进 `build-out/stage-final/` → 注入模型/配置/字体/主题 → 写 DEBIAN → `dpkg-deb` → 打 tar → 生成「双击安装」脚本
+3. **`repack-ubuntu-amd64.sh`** —— **Ubuntu amd64 出包的唯一入口**：复用 `/out` 的 CT2/librime → 重编 addon + config-ui → 重编 librime 插件 → 把关 → 调 `repack-container.sh`
+
+**别绕过 3 直接调 2**：`/priv/build` 是 Ubuntu 线与 Arch 线共用的构建树。Arch 的 fcitx5 比发行版新，addon 在那里链的是 `registerDomain(const char*, const std::filesystem::path&)`，而这个重载只有 fcitx5 master 有 —— 打进 Ubuntu 包后在 24.04 的 5.1.7 上 `dlopen` 失败，fcitx5 开机即退（2026-10-13 的 5.0.15 就是这么坏的）。3 里第 `[3/4]` 步与 `repack-container.sh` 里各有一道把关，链错重载就拒绝出包。
 
 （`pkg-22.04.sh`、`pkg-host.sh`、`build-deb.sh`、`rebuild-ct2.sh`、`boost-*.sh`、`test-24.04.sh`、`test-final.sh` 等是早期路线的遗留，脚本之间已无人调用。）
 
 一条命令构建：
 ```bash
-# 构建（私有源码来自 /priv，第三方产物来自 /src）
-docker run --rm -e SKIP_LIBRIME=1 \
-  -v ~/bangke/commit/fcitx5-rime:/priv -v ~/bangke/openSource:/src \
-  ubuntu:22.04 bash /priv/dist/build-22.04.sh
-# 打包（只做 staging + dpkg-deb，不编译）
+# Ubuntu amd64 一键出包（编 addon/config-ui/插件 + 打包，别拆开跑）
 docker run --rm \
-  -v ~/bangke/commit/fcitx5-rime:/priv -v ~/bangke/openSource:/src \
-  ubuntu:22.04 bash /priv/dist/repack-container.sh
+  -v ~/bangke/commit/fcitx5-rime:/priv \
+  -v ~/bangke/commit/bangke-librime:/librime:ro \
+  -v ~/bangke/commit/bangke-ai-predict:/plugin:ro \
+  -v ~/bangke/vendor:/vendor:ro \
+  -v ~/bangke/build-out/22.04:/out \
+  ubuntu:22.04 bash /priv/dist/repack-ubuntu-amd64.sh
 ```
 
 ## 五、librime 的 22.04 兼容补丁（重编时必须保留）
@@ -109,7 +112,7 @@ reserved-property 协议本身（`_refresh_ui` / `_comment_highlight` / `_commen
 | `fcitx5-rime-ai-predict_<版本>_amd64.deb` | 安装包本体 |
 | `蚌壳拼音-安装.sh` | 双击安装脚本（品牌名已注入） |
 
-版本号在 `repack-container.sh` 顶部的 `VERSION` —— 它与源码基线**无关**：`CMakeLists.txt` 里 `project(fcitx5-rime VERSION 5.0.11)` 指上游基线，包版本是我们自己往上加的（现在 5.0.15）。**tar 名必须带版本号** —— 官网清单只从文件名读版本（见下一节）。
+版本号在 `repack-container.sh` 顶部的 `VERSION` —— 它与源码基线**无关**：`CMakeLists.txt` 里 `project(fcitx5-rime VERSION 5.0.11)` 指上游基线，包版本是我们自己往上加的（现在 5.0.16）。**tar 名必须带版本号** —— 官网清单只从文件名读版本（见下一节）。
 
 deb 装到哪儿（159 个文件）：
 

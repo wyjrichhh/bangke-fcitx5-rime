@@ -23,7 +23,7 @@ apt-get install -y -qq cmake >/dev/null 2>&1
 [ -f /priv/dist/im-brand.env ] && . /priv/dist/im-brand.env
 IM_NAME="${IM_NAME:-蚌壳拼音}"
 
-VERSION="${VERSION:-5.0.15}"
+VERSION="${VERSION:-5.0.16}"
 ARCH=amd64
 PKG=fcitx5-rime-ai-predict
 PRIVLIB=/usr/lib/fcitx5-rime-ai
@@ -52,6 +52,17 @@ if [ -f "$STAGE/usr/lib/fcitx5/rime-ai.so" ]; then
   mv "$STAGE/usr/lib/fcitx5/rime-ai.so" "$STAGE/usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so"
   rmdir "$STAGE/usr/lib/fcitx5" 2>/dev/null || true
 fi
+# /priv/build 与 Arch 线共用，可能残留 Arch 编的 addon —— 它链的是 fcitx5 master 才有的
+# registerDomain(path) 重载，在 22.04/24.04 的 fcitx5 上 dlopen 失败、fcitx5 开机即退。
+# 先把 nm 的输出收完再比：`nm | grep -q` 会在命中时让 nm 吃 SIGPIPE，配合 pipefail 反而误判成失败。
+RIME_SYMS=$(nm -D "$STAGE/usr/lib/x86_64-linux-gnu/fcitx5/rime-ai.so" || true)
+case "$RIME_SYMS" in
+  *registerDomainEPKcS1_*) ;;
+  *)
+    echo "!! rime-ai.so 不是对着 22.04/24.04 的 fcitx5 编的（缺 registerDomain(char const*, char const*)）" >&2
+    echo "!! 先在 ubuntu:22.04 容器里重编 addon（dist/repack-ubuntu-amd64.sh）" >&2
+    exit 1 ;;
+esac
 
 # 1.5) config-ui (Qt5) → /usr
 DESTDIR="$STAGE" cmake --install /priv/config-ui/build --prefix /usr >/dev/null 2>&1
@@ -323,29 +334,41 @@ _bk_as_user() {
   fi
 }
 
+# 真正活着的 fcitx5：pgrep 会把容器留下的 <defunct> 一并返回，挑中它就会去读一个不存在的
+# /proc/<pid>/environ（报 "No such process"），等待循环也会白等满 10 秒。
+_bk_live_fcitx5() {
+  local p
+  for p in $(pgrep -x fcitx5 2>/dev/null); do
+    case "$(ps -o stat= -p "$p" 2>/dev/null)" in
+    Z* | "") continue ;;
+    esac
+    printf '%s\n' "$p"
+  done
+}
+
 _stop_fcitx5() {
   _BK_ENV=""; _BK_USER=""
   local pid
-  pid=$(pgrep -x fcitx5 | head -1) || true
+  pid=$(_bk_live_fcitx5 | head -1)
   [ -n "$pid" ] || return 0
   # 必须走 /proc/<pid>：直接 stat "$pid" 是个相对路径、必然失败，_BK_USER 空掉之后
   # 末尾那次 _start_fcitx5 就静默不执行了（装完 fcitx5 一直没起来，只能重新登录）。
   _BK_USER=$(stat -c '%U' "/proc/$pid" 2>/dev/null)
-  if [ -r "/proc/$pid/environ" ]; then
-    local v line
-    for v in WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS \
-             XDG_SESSION_TYPE XDG_CURRENT_DESKTOP; do
-      line=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -m1 "^$v=")
-      [ -n "$line" ] && _BK_ENV="$_BK_ENV $line"
-    done
-  fi
+  # environ 只读一次：按变量逐个读的话，进程在中途消失会刷一屏 "No such process"。
+  local v line env_dump
+  env_dump=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null) || env_dump=""
+  for v in WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS \
+           XDG_SESSION_TYPE XDG_CURRENT_DESKTOP; do
+    line=$(printf '%s\n' "$env_dump" | grep -m1 "^$v=")
+    [ -n "$line" ] && _BK_ENV="$_BK_ENV $line"
+  done
   # 进程归 systemd 管就让 systemd 停（它不会 Restart=always 自己顶回来）
   if _bk_as_user systemctl --user is-active --quiet "$_BK_UNIT"; then
     _bk_as_user systemctl --user stop "$_BK_UNIT" || true
   fi
   pkill -x fcitx5 2>/dev/null || true
   local i
-  for i in $(seq 1 10); do pgrep -x fcitx5 >/dev/null || break; sleep 1; done
+  for i in $(seq 1 10); do [ -n "$(_bk_live_fcitx5)" ] || break; sleep 1; done
   pkill -9 -x fcitx5 2>/dev/null || true
 }
 
@@ -358,22 +381,10 @@ _start_fcitx5() {
   if _bk_as_user systemctl --user restart "$_BK_UNIT"; then
     local i
     for i in $(seq 1 10); do
-      pgrep -x fcitx5 >/dev/null && return 0
+      [ -n "$(_bk_live_fcitx5)" ] && return 0
       sleep 1
     done
   fi
-  if [ -n "$_BK_ENV" ]; then
-    # shellcheck disable=SC2086
-    sudo -u "$_BK_USER" -H env $_BK_ENV fcitx5 -r -d >/dev/null 2>&1 &
-  else
-    sudo -u "$_BK_USER" -H fcitx5 -r -d >/dev/null 2>&1 &
-  fi
-}
-
-_start_fcitx5() {
-  [ -n "$_BK_USER" ] || return 0
-  [ "$_BK_USER" = root ] && return 0
-  command -v sudo >/dev/null 2>&1 || return 0
   if [ -n "$_BK_ENV" ]; then
     # shellcheck disable=SC2086
     sudo -u "$_BK_USER" -H env $_BK_ENV fcitx5 -r -d >/dev/null 2>&1 &
@@ -498,29 +509,41 @@ _bk_as_user() {
   fi
 }
 
+# 真正活着的 fcitx5：pgrep 会把容器留下的 <defunct> 一并返回，挑中它就会去读一个不存在的
+# /proc/<pid>/environ（报 "No such process"），等待循环也会白等满 10 秒。
+_bk_live_fcitx5() {
+  local p
+  for p in $(pgrep -x fcitx5 2>/dev/null); do
+    case "$(ps -o stat= -p "$p" 2>/dev/null)" in
+    Z* | "") continue ;;
+    esac
+    printf '%s\n' "$p"
+  done
+}
+
 _stop_fcitx5() {
   _BK_ENV=""; _BK_USER=""
   local pid
-  pid=$(pgrep -x fcitx5 | head -1) || true
+  pid=$(_bk_live_fcitx5 | head -1)
   [ -n "$pid" ] || return 0
   # 必须走 /proc/<pid>：直接 stat "$pid" 是个相对路径、必然失败，_BK_USER 空掉之后
   # 末尾那次 _start_fcitx5 就静默不执行了（装完 fcitx5 一直没起来，只能重新登录）。
   _BK_USER=$(stat -c '%U' "/proc/$pid" 2>/dev/null)
-  if [ -r "/proc/$pid/environ" ]; then
-    local v line
-    for v in WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS \
-             XDG_SESSION_TYPE XDG_CURRENT_DESKTOP; do
-      line=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -m1 "^$v=")
-      [ -n "$line" ] && _BK_ENV="$_BK_ENV $line"
-    done
-  fi
+  # environ 只读一次：按变量逐个读的话，进程在中途消失会刷一屏 "No such process"。
+  local v line env_dump
+  env_dump=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null) || env_dump=""
+  for v in WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS \
+           XDG_SESSION_TYPE XDG_CURRENT_DESKTOP; do
+    line=$(printf '%s\n' "$env_dump" | grep -m1 "^$v=")
+    [ -n "$line" ] && _BK_ENV="$_BK_ENV $line"
+  done
   # 进程归 systemd 管就让 systemd 停（它不会 Restart=always 自己顶回来）
   if _bk_as_user systemctl --user is-active --quiet "$_BK_UNIT"; then
     _bk_as_user systemctl --user stop "$_BK_UNIT" || true
   fi
   pkill -x fcitx5 2>/dev/null || true
   local i
-  for i in $(seq 1 10); do pgrep -x fcitx5 >/dev/null || break; sleep 1; done
+  for i in $(seq 1 10); do [ -n "$(_bk_live_fcitx5)" ] || break; sleep 1; done
   pkill -9 -x fcitx5 2>/dev/null || true
 }
 
@@ -533,22 +556,10 @@ _start_fcitx5() {
   if _bk_as_user systemctl --user restart "$_BK_UNIT"; then
     local i
     for i in $(seq 1 10); do
-      pgrep -x fcitx5 >/dev/null && return 0
+      [ -n "$(_bk_live_fcitx5)" ] && return 0
       sleep 1
     done
   fi
-  if [ -n "$_BK_ENV" ]; then
-    # shellcheck disable=SC2086
-    sudo -u "$_BK_USER" -H env $_BK_ENV fcitx5 -r -d >/dev/null 2>&1 &
-  else
-    sudo -u "$_BK_USER" -H fcitx5 -r -d >/dev/null 2>&1 &
-  fi
-}
-
-_start_fcitx5() {
-  [ -n "$_BK_USER" ] || return 0
-  [ "$_BK_USER" = root ] && return 0
-  command -v sudo >/dev/null 2>&1 || return 0
   if [ -n "$_BK_ENV" ]; then
     # shellcheck disable=SC2086
     sudo -u "$_BK_USER" -H env $_BK_ENV fcitx5 -r -d >/dev/null 2>&1 &
