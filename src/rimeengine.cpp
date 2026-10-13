@@ -19,6 +19,8 @@
 #include <fcitx/candidatelist.h>
 #include <fcitx/inputcontext.h>
 #include <fcitx/inputcontextmanager.h>
+#include <fcitx/inputmethodentry.h>
+#include <fcitx/inputmethodmanager.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/userinterfacemanager.h>
 #include <rime_api.h>
@@ -356,20 +358,38 @@ void RimeEngine::rimeNotificationHandler(void *context, RimeSessionId session,
         });
 }
 
+// 通知里显示的名字跟「注册名」走：fcitx5 从 inputmethod conf 读到的 Name=，也就是打包时
+// 写死在物料里的品牌名。上游这里写的是 _("Rime")；而这个仓库不装 .mo（po/CMakeLists.txt
+// 因 gettext 0.21 的 bug 关了翻译安装），_() 出来就是英文原样 —— 不跟注册名走的话，
+// 用户看到的永远是「Rime」。
+std::string RimeEngine::displayName() const {
+    std::string result;
+    instance_->inputMethodManager().foreachEntries(
+        [&result](const InputMethodEntry &entry) {
+            if (entry.addon() != FCITX_RIME_ADDON_NAME) {
+                return true;
+            }
+            result = entry.name();
+            return false;
+        });
+    return result.empty() ? FCITX_RIME_ADDON_NAME : result;
+}
+
 void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
                         const std::string &messageValue) {
     const char *message = nullptr;
     const char *icon = "";
     if (messageType == "deploy") {
         icon = "fcitx-rime-deploy";
+        // 正文里不写引擎名 —— 名字由标题带（见下面 showTip 的 displayName()），
+        // 上游那三句 _("Rime ...") 会把这个品牌名顶掉。
         if (messageValue == "start") {
-            message = _("Rime is under maintenance. It may take a few "
-                        "seconds. Please wait until it is finished...");
+            message = _("Deploying. It may take a few seconds, please wait...");
         } else if (messageValue == "success") {
-            message = _("Rime is ready.");
+            message = _("Deployment finished.");
             updateSchemaMenu();
         } else if (messageValue == "failure") {
-            message = _("Rime has encountered an error. "
+            message = _("Deployment failed. "
                         "See /tmp/rime.fcitx.ERROR for details.");
         }
     } else if (messageType == "option") {
@@ -396,8 +416,9 @@ void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
 
     auto notifications = this->notifications();
     if (message && notifications) {
-        notifications->call<INotifications::showTip>(
-            "fcitx-rime-deploy", _("Rime"), icon, _("Rime"), message, -1);
+        const auto name = displayName();
+        notifications->call<INotifications::showTip>("fcitx-rime-deploy", name,
+                                                     icon, name, message, -1);
     }
     timeEvent_ = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,

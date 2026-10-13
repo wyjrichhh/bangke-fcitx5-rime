@@ -107,6 +107,8 @@ private:
 
     void sync();
     void updateSchemaMenu();
+    // 通知里用的显示名（= fcitx5 注册名，来自 inputmethod conf 的 Name=）
+    std::string displayName() const;
     void notify(RimeSessionId session, const std::string &type,
                 const std::string &value);
     void handleReservedProperty(RimeSessionId session,
