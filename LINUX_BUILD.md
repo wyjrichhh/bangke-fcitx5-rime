@@ -109,7 +109,7 @@ reserved-property 协议本身（`_refresh_ui` / `_comment_highlight` / `_commen
 | `fcitx5-rime-ai-predict_<版本>_amd64.deb` | 安装包本体 |
 | `蚌壳拼音-安装.sh` | 双击安装脚本（品牌名已注入） |
 
-版本号在 `repack-container.sh` 顶部的 `VERSION` —— 它与源码基线**无关**：`CMakeLists.txt` 里 `project(fcitx5-rime VERSION 5.0.11)` 指上游基线，包版本是我们自己往上加的（现在 5.0.14）。**tar 名必须带版本号** —— 官网清单只从文件名读版本（见下一节）。
+版本号在 `repack-container.sh` 顶部的 `VERSION` —— 它与源码基线**无关**：`CMakeLists.txt` 里 `project(fcitx5-rime VERSION 5.0.11)` 指上游基线，包版本是我们自己往上加的（现在 5.0.15）。**tar 名必须带版本号** —— 官网清单只从文件名读版本（见下一节）。
 
 deb 装到哪儿（159 个文件）：
 

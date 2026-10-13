@@ -35,7 +35,7 @@ set -euo pipefail
 PRIV="${PRIV:-/priv}"
 OUT="${OUT:-/out}"
 SRC=/out/src          # 容器内的构建工作区（/out 是持久化的，便于 SKIP_LIBRIME 复用）
-VERSION="${VERSION:-5.0.14}"
+VERSION="${VERSION:-5.0.15}"
 SKIP_LIBRIME="${SKIP_LIBRIME:-0}"
 SKIP_DEPS="${SKIP_DEPS:-0}"
 
