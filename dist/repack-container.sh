@@ -23,7 +23,7 @@ apt-get install -y -qq cmake >/dev/null 2>&1
 [ -f /priv/dist/im-brand.env ] && . /priv/dist/im-brand.env
 IM_NAME="${IM_NAME:-蚌壳拼音}"
 
-VERSION="${VERSION:-5.0.16}"
+VERSION="${VERSION:-5.0.17}"
 ARCH=amd64
 PKG=fcitx5-rime-ai-predict
 PRIVLIB=/usr/lib/fcitx5-rime-ai

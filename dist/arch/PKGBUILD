@@ -10,7 +10,7 @@
 #     makepkg -f      → bangke-pinyin-<版本>-<arch>.pkg.tar.zst
 #     sudo pacman -U bangke-pinyin-*.pkg.tar.zst
 pkgname=bangke-pinyin
-pkgver=5.0.16
+pkgver=5.0.17
 pkgrel=1
 pkgdesc='蚌壳拼音 —— 基于 Rime 的 fcitx5 输入法（含 CTranslate2 AI 预测）'
 arch=('aarch64' 'x86_64')
