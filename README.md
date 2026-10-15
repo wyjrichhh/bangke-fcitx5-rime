@@ -1,6 +1,6 @@
 # 蚌壳拼音 Linux 前端
 
-基于 Fcitx5 / Rime 的蚌壳拼音前端，支持本地 AI 候选、Qt 设置界面和 Omarchy 自绘候选面板。长期维护分支为 `feat/omarchy-panel`，ARM 与 Intel/AMD 共用源码。
+基于 Fcitx5 / Rime 的蚌壳拼音前端，支持本地 AI 候选、Qt 设置界面和 Omarchy 自绘候选面板。长期维护分支为 `main`，ARM 与 Intel/AMD 共用源码。
 
 ## 平台与安装
 

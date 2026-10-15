@@ -2,7 +2,7 @@
 
 ## 分支与范围
 
-`feat/omarchy-panel` 是 Omarchy / Hyprland 长期维护分支。ARM 和 Intel/AMD 使用同一份实现，请从此分支创建自己的工作分支，提交 PR 合入此分支。Ubuntu GNOME 46 的实验适配位于 `panel-gnome/`，与 Omarchy 共用候选及外观协议；未启用扩展时保留 Classic UI。跨平台改动需注明受影响的平台。
+`main` 是 Linux 统一维护主干。Ubuntu / GNOME 与 Omarchy / Hyprland 的 ARM、Intel/AMD 包使用同一份源码，请从主干创建工作分支，提交 PR 合入主干。Ubuntu GNOME 46 的实验适配位于 `panel-gnome/`，与 Omarchy 共用候选及外观协议；未启用扩展时保留 Classic UI。跨平台改动需注明受影响的平台。
 
 ## 开发流程
 
