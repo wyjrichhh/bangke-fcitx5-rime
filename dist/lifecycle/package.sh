@@ -7,6 +7,7 @@ BASE=/usr/lib/bangke-pinyin
 if [[ $ACTION == install ]]; then
   mkdir -p "$STATE/lifecycle"
   cp "$BASE/"{package.sh,session.sh,user-data.py,migrate-experiment.py} "$STATE/lifecycle/"
+  [[ ! -f "$BASE/gnome.sh" ]] || cp "$BASE/gnome.sh" "$STATE/lifecycle/"
   for platform in ubuntu omarchy; do
     [[ ! -f /usr/share/bangke-pinyin/$platform ]] || touch "$STATE/lifecycle/$platform"
   done

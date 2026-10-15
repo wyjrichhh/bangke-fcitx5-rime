@@ -18,6 +18,7 @@ class RimeDeploy {
 
   static QString triggerDeploy();
   static bool usesCustomPanel();
+  static void ensurePanel();
   static QString setCustomPanelAppearance(const QString& appearance);
   static QString setCustomPanelLayout(const QString& orientation);
 

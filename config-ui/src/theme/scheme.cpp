@@ -1,6 +1,7 @@
 #include "scheme.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QDir>
 #include "paths.h"
 #include <QList>
@@ -233,7 +234,7 @@ BangkeConfig BangkeConfig::load(const QString& sharedPath,
   config.platform_ = std::move(platform);
   config.parseShared(sharedPath);
   // Ship a complete palette catalogue; locally installed/custom themes win.
-  if (config.platform_.source == ThemeSource::Omarchy || qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel") {
+  if (config.platform_.source == ThemeSource::Omarchy || QFileInfo::exists(QStringLiteral("/usr/share/bangke-pinyin/omarchy-themes")) || (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel" || qgetenv("BANGKE_PANEL_BACKEND") == "gnome")) {
     QStringList roots{QStringLiteral("/usr/share/bangke-pinyin/omarchy-themes")};
     const QString override = QString::fromLocal8Bit(qgetenv("BK_OMARCHY_CATALOG_DIR"));
     if (!override.isEmpty()) roots = QStringList{override};
@@ -262,7 +263,7 @@ BangkeConfig BangkeConfig::load(const QString& sharedPath,
   const StyleOptions factory = styleFrom(config.sharedStyle_, StyleOptions());
   const StyleOptions baseline = baselineStyle(factory, config.platform_);
   config.style_ = styleFrom(config.stylePatch_, baseline);
-  if ((config.platform_.source == ThemeSource::Omarchy || qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel") && !config.stylePatch_.contains("candidate_list_layout")) {
+  if ((config.platform_.source == ThemeSource::Omarchy || (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel" || qgetenv("BANGKE_PANEL_BACKEND") == "gnome")) && !config.stylePatch_.contains("candidate_list_layout")) {
     // Earlier Linux UI used text_orientation for the candidate-list axis.
     config.style_.candidateListLayout = config.style_.textOrientation == "vertical" ? "stacked" : "linear";
     config.style_.textOrientation = "horizontal";

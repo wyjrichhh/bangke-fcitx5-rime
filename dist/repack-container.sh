@@ -146,7 +146,7 @@ Section: utils
 Priority: optional
 Architecture: $ARCH
 Maintainer: Beijing Bangke Intelligent Technology Co., Ltd.
-Depends: fcitx5, libc6, libstdc++6, libgcc-s1, libqt5widgets5, libqt5dbus5, python3, util-linux, sudo, qtwayland5, librime-data, im-config, fcitx5-frontend-gtk3, fcitx5-frontend-qt5
+Depends: fcitx5, libc6, libstdc++6, libgcc-s1, libqt5widgets5, libqt5dbus5, python3, util-linux, sudo, qtwayland5, librime-data, im-config, fcitx5-frontend-gtk3, fcitx5-frontend-qt5, libglib2.0-bin
 Conflicts: fcitx5-rime
 Replaces: fcitx5-rime
 Provides: fcitx5-rime

@@ -7,6 +7,7 @@
 #include <QTimer>
 
 #include "fcitxprofile.h"
+#include "rimedeploy.h"
 #include "mainwindow.h"
 #include "theme/migrate.h"
 #include "theme/paths.h"
@@ -139,6 +140,13 @@ int main(int argc, char* argv[]) {
 
   QApplication app(argc, argv);
   app.setApplicationName(QStringLiteral("fcitx5-rime-config"));
+  if (!headless) RimeDeploy::ensurePanel();
+  if (!headless && RimeDeploy::usesCustomPanel() &&
+      qEnvironmentVariableIsEmpty("BANGKE_PANEL_BACKEND")) {
+    const QString desktop = QString::fromLocal8Bit(qgetenv("XDG_CURRENT_DESKTOP"));
+    if (desktop.contains(QStringLiteral("GNOME"), Qt::CaseInsensitive))
+      qputenv("BANGKE_PANEL_BACKEND", "gnome");
+  }
   // 系统主题只探测一次（要跑 gsettings/hyprctl），之后 palette 与各处的
   // BangkeConfig 都用这一份 —— 同一个进程里不会出现两套配色。
   bangke::setAppPlatformTheme(bangke::currentPlatformTheme());

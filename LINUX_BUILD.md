@@ -42,7 +42,7 @@ Intel/AMD 将 `--platform` 改为 `linux/amd64`，镜像改为 `archlinux:latest
 bash /priv/dist/build-ubuntu24.sh
 ```
 
-保留 Classic UI；不把 Hyprland 插件或 Omarchy 主题能力作为 GNOME 支持。`build-22.04.sh` 是共用的 Debian 系编译实现，外层入口负责目标系统检查。
+包中包含 GNOME Shell 46 面板扩展实验实现，不安装 Hyprland；未启用扩展时保留 Classic UI。实现与真实桌面验收要求见 [panel-gnome/README.md](panel-gnome/README.md)。`build-22.04.sh` 是共用的 Debian 系编译实现，外层入口负责目标系统检查。
 
 ## 回归检查
 

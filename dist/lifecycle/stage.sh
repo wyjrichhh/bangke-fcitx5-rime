@@ -14,11 +14,22 @@ Exec=/usr/lib/bangke-pinyin/session.sh install
 NoDisplay=true
 EOF
 touch "$ROOT/usr/share/bangke-pinyin/$PLATFORM"
+# Both custom panels use Fcitx's Kimpanel UI, which doesn't enable its tray.
+# Reuse the same tray/menu bridge on both desktops.
+if [[ $PLATFORM == ubuntu || $PLATFORM == omarchy ]]; then
+  bash "$REPO/panel-omarchy/tray/build.sh" "$ROOT"
+fi
+if [[ $PLATFORM == ubuntu ]]; then
+  EXTENSIONS="$ROOT/usr/share/gnome-shell/extensions"
+  mkdir -p "$EXTENSIONS"
+  cp -a "$REPO/panel-gnome/bangke-panel@bangke.org" "$EXTENSIONS/"
+  install -m755 "$HERE/gnome.sh" "$ROOT/usr/lib/bangke-pinyin/"
+  cp -a "$REPO/panel-omarchy/themes" "$ROOT/usr/share/bangke-pinyin/omarchy-themes"
+fi
 if [[ $PLATFORM == omarchy ]]; then
   touch "$ROOT/usr/share/bangke-pinyin/omarchy"
   rm -rf "$ROOT/usr/share/bangke-pinyin/omarchy-themes"
   cp -a "$REPO/panel-omarchy/themes" "$ROOT/usr/share/bangke-pinyin/omarchy-themes"
-  bash "$REPO/panel-omarchy/tray/build.sh" "$ROOT"
   install -m755 "$REPO/panel-omarchy/panel.py" "$ROOT/usr/bin/bangke-panel"
   install -m644 "$REPO/panel-omarchy/hyprland-caret-plugin/caretshim.cpp" "$ROOT/usr/share/bangke-pinyin/"
   install -m755 "$HERE/caret.sh" "$ROOT/usr/lib/bangke-pinyin/"

@@ -21,7 +21,7 @@ Hyprland 更新后旧插件 ABI 可能不匹配，需要重新登录；不要强
 
 ## Ubuntu 24.04 amd64
 
-使用 `sudo apt install ./fcitx5-rime-ai-predict_<版本>_amd64.deb`，自动补齐依赖。首次安装后注销并登录。默认 GNOME 使用原有 Classic UI，不支持本分支的 Hyprland 自绘面板。
+使用 `sudo apt install ./fcitx5-rime-ai-predict_<版本>_amd64.deb`，自动补齐依赖。首次安装后注销并登录。GNOME Shell 46 包含实验候选面板扩展，首次安装需要注销、登录后加载；已有其他 Kimpanel 时保留原面板。扩展未启用时使用 Classic UI。当前实现已通过独立 GNOME 合成器和 GTK 中文输入测试，多屏及混合缩放等发布验收待完成，详见 `panel-gnome/README.md`。
 
 ## 架构或动态库不匹配
 
