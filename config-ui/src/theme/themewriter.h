@@ -22,6 +22,8 @@ struct ThemeResult {
 
 // 解析字体：字族没装时预览回落到系统默认（classicui.conf 里仍写配置的字族，
 // 由 pango 自己回落）。
+QString customPanelAppearance(const BangkeConfig& config, const StyleOptions& style);
+
 QFont resolveFont(const StyleOptions& style, QString* installedFamily = nullptr);
 
 // classicui.conf 的 `Font=` 该写什么。**不要自己拼字符串** —— 两个写入点

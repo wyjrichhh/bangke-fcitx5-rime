@@ -8,11 +8,7 @@
 # 段可从 mac 侧整块拷贝，不需要逐值换算（色值 0xBBGGRR / 0xAABBGGRR 是 BGR
 # 字节序，各端按同一约定解析）。
 #
-# style: 段在 Linux 上并非全部生效 —— fcitx5 的候选面板由 classicui 插件绘制，
-# 下列键无对应通道，保留只为与 mac 侧保持同步（设置页也不暴露）：
-#   candidate_list_layout（classicui 只有横排/竖排，没有 stacked/linear）
-#   inline_candidate / translucency / mutual_exclusive / memorize_size
-#   candidate_format / spacing（预编辑与候选的间距）
+# Omarchy 自绘面板使用完整 style 配置；Ubuntu classicui 仅使用其支持的子集。
 config_version: '1.0'
 
 style:

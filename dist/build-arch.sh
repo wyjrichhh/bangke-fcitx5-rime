@@ -1,41 +1,16 @@
 #!/usr/bin/env bash
-# 蚌壳拼音 —— Arch 系（aarch64 / x86_64）出包。同一份脚本，两个架构各在自己的容器里跑：
-#
-#   aarch64（Mac 本机，Apple Silicon 原生）：
-#     docker run --rm \
-#       -v ~/dev/bangke/bangke-fcitx5-rime:/priv \
-#       -v ~/dev/bangke/bangke-librime:/librime:ro \
-#       -v ~/dev/bangke/bangke-ai-predict:/plugin:ro \
-#       -v ~/bangke/vendor:/vendor:ro \
-#       -v ~/bangke/build-out/aarch64:/out \
-#       menci/archlinuxarm:base bash /priv/dist/build-arch.sh
-#
-#   x86_64（在构建机 17 上跑，那边原生 x86_64；Mac 上编 amd64 慢且老被本机代理干扰）：
-#     docker run --rm \
-#       -v ~/bangke/commit/fcitx5-rime:/priv \
-#       -v ~/bangke/commit/bangke-librime:/librime:ro \
-#       -v ~/bangke/commit/bangke-ai-predict:/plugin:ro \
-#       -v ~/bangke/vendor:/vendor:ro \
-#       -v ~/bangke/build-out/x86_64:/out \
-#       archlinux:latest bash /priv/dist/build-arch.sh
-#
-# 产物：/out/bangke-pinyin-<版本>-<pkgrel>-<架构>.pkg.tar.zst（+ 未打包的 bangke-pkg 安装树）。
-# 架构不写死在脚本里：PKGBUILD 声明了 arch=('aarch64' 'x86_64')，makepkg 自己认。
-#
-# 与 Ubuntu 线同一套约定（/priv + /librime + /plugin + /vendor + /out），平台差异只有容器
-# 镜像与包格式；产物互不通用 —— Arch 是滚动发行版，glibc 方向与 22.04 相反。
-#
-# 两个复用开关：
-#   SKIP_DEPS=1    依赖已装好的环境跳过联网装包（把出过包的容器 commit 成镜像再跑即可；
-#                  本机 fake-ip 代理会掐掉 archlinuxarm 镜像站，那时全靠它）
-#   SKIP_LIBRIME=1 复用 /out/src 里已有的 CT2 与 librime 构建树（只改了 addon/打包时用）
+# Build the same Omarchy sources for aarch64 or x86_64 in an Arch container.
+# Mount frontend=/priv, engine=/librime, plugin=/plugin, assets=/vendor, output=/out.
+# See LINUX_BUILD.md for complete container commands and vendor requirements.
+# SKIP_DEPS=1 reuses installed dependencies; SKIP_LIBRIME=1 reuses /out/src builds.
 
 set -euo pipefail
+JOBS="${JOBS:-4}"
 
 PRIV="${PRIV:-/priv}"
 OUT="${OUT:-/out}"
 SRC=/out/src          # 容器内的构建工作区（/out 是持久化的，便于 SKIP_LIBRIME 复用）
-VERSION="${VERSION:-5.0.18}"
+VERSION="${VERSION:-5.0.19}"
 SKIP_LIBRIME="${SKIP_LIBRIME:-0}"
 SKIP_DEPS="${SKIP_DEPS:-0}"
 
@@ -81,7 +56,7 @@ else
     -DOPENMP_RUNTIME=NONE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
     -DCMAKE_INSTALL_RPATH=/usr/lib/fcitx5-rime-ai -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     "${CMAKE_OLD_POLICY[@]}"
-  cmake --build build -j "$(nproc)"
+  cmake --build build -j "$JOBS"
   cmake --build build --target install
 
   echo "=== [3/7] 构建 librime + 插件 ==="
@@ -116,7 +91,7 @@ else
     -DBUILD_SHARED_LIBS=ON -DBUILD_MERGED_PLUGINS=OFF -DENABLE_EXTERNAL_PLUGINS=ON \
     -DBUILD_TEST=OFF -DBUILD_SAMPLE=OFF -DCTRANSLATE2_ROOT=/usr/local \
     "${CMAKE_OLD_POLICY[@]}"
-  ninja -C build -j "$(nproc)"
+  ninja -C build -j "$JOBS"
   cmake --install build
 fi
 
@@ -131,13 +106,13 @@ cd "$PRIV"
 rm -rf build
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH=/usr/local -DRIME_DATA_DIR=/usr/share/rime-data "${CMAKE_OLD_POLICY[@]}"
-ninja -C build -j "$(nproc)"
+ninja -C build -j "$JOBS"
 
 echo "=== [5/7] 构建 config-ui (Qt5) ==="
 rm -rf "$PRIV/config-ui/build"
 cmake -S "$PRIV/config-ui" -B "$PRIV/config-ui/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr "${CMAKE_OLD_POLICY[@]}"
-ninja -C "$PRIV/config-ui/build" -j "$(nproc)"
+ninja -C "$PRIV/config-ui/build" -j "$JOBS"
 
 # ---------------------------------------------------------------- 组装安装树
 echo "=== [6/7] 组装安装树 → $OUT/bangke-pkg ==="
@@ -146,7 +121,7 @@ rm -rf "$PKG"
 mkdir -p "$PKG"/{usr/lib/fcitx5,usr/lib/fcitx5-rime-ai/rime-plugins,usr/bin,etc/ld.so.conf.d,usr/share/fcitx5/{addon,inputmethod},usr/share/applications}
 
 cp "$PRIV/build/src/rime-ai.so"                     "$PKG/usr/lib/fcitx5/rime-ai.so"
-cp /usr/local/lib/libctranslate2.so*                "$PKG/usr/lib/fcitx5-rime-ai/"
+cp -a /usr/local/lib/libctranslate2.so*                "$PKG/usr/lib/fcitx5-rime-ai/"
 cp "$SRC/librime/build/lib/librime.so.1."*          "$PKG/usr/lib/fcitx5-rime-ai/"
 # addon 与插件的 DT_NEEDED 都是 SONAME librime.so.1，包里必须有这个名字。
 RIME_SO=$(cd "$PKG/usr/lib/fcitx5-rime-ai" && ls librime.so.1.* | head -1)
@@ -178,12 +153,7 @@ cp "$PRIV/config-ui/build/fcitx5-rime-config" "$PKG/usr/bin/"
 # deb 用的 /usr/local/share 在 Arch 上扫不到（实测 fcitx5-diagnose 数不到 Rime）。
 echo /usr/lib/fcitx5-rime-ai > "$PKG/etc/ld.so.conf.d/fcitx5-rime-ai.conf"
 
-# 托盘图标：Omarchy 的 omarchy-fcitx5.service 默认写着 `--disable notificationitem`
-# （它的理由是「会和栏自己画的指示器重复」）。这份 drop-in 把它打开，托盘里才有 fcitx5 的
-# 状态图标 —— 右键菜单里挂着「蚌壳拼音 设置 / 部署 / 同步」。别的 Arch 机器上没有那个
-# unit，文件躺着不生效；装了的人想恢复原状就删掉它（文件头注释里写了命令）。
-mkdir -p "$PKG/etc/systemd/user/omarchy-fcitx5.service.d"
-cp "$PRIV/dist/arch/10-bangke-tray.conf" "$PKG/etc/systemd/user/omarchy-fcitx5.service.d/"
+bash "$PRIV/dist/lifecycle/stage.sh" "$PKG" omarchy
 
 # 品牌名不在这里做 —— 它直接写在物料里（src/rime-ai.conf.in、src/rime-ai-addon.conf.in.in、
 # config-ui/data/fcitx5-rime-config.desktop、metainfo）。以前是打包时 sed 改，但 msgfmt 会拿
@@ -200,6 +170,7 @@ mkdir -p "$PKG/usr/share/fcitx5-rime/predict_models"
 DEFAULT_MODEL="${DEFAULT_MODEL:-zh-base-ct2-int8}"
 cp -a "/vendor/models/$DEFAULT_MODEL"                "$PKG/usr/share/fcitx5-rime/predict_models/"
 cp -a "$PRIV/data/bangke.yaml"                       "$PKG/usr/share/fcitx5-rime/seed/bangke.yaml"
+python3 "$PRIV/dist/lifecycle/opencc-seed.py" "$PKG"
 mkdir -p "$PKG/usr/share/fonts/truetype/fcitx5-rime"
 cp -a /vendor/fonts/*.ttf /vendor/fonts/*.otf "$PKG/usr/share/fonts/truetype/fcitx5-rime/" 2>/dev/null || true
 

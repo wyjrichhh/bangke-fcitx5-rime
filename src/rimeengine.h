@@ -35,6 +35,7 @@ FCITX_CONFIGURATION(
     Option<bool> showPreeditInApplication{this, "PreeditInApplication",
                                           _("Show preedit within application"),
                                           true};
+    Option<bool> inlineCandidate{this, "InlineCandidate", _("Show selected candidate in application"), false};
     Option<bool> preeditCursorPositionAtBeginning{
         this, "PreeditCursorPositionAtBeginning",
         _("Fix embedded preedit cursor at the beginning of the preedit"), true};

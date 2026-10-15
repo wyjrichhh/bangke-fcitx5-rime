@@ -44,6 +44,8 @@ public:
 private:
     void createSession();
 
+    bool compositionActive_ = false;
+    uint64_t compositionSerial_ = 0;
     std::string lastMode_;
     RimeEngine *engine_;
     RimeSessionId session_ = 0;

@@ -1,10 +1,13 @@
 #include "preview.h"
 
 #include <QFontMetricsF>
+#include <QtMath>
 #include <QPainter>
 #include <QPainterPath>
+#include <QRegularExpression>
 
 #include "theme/ninegrid.h"
+#include "ui/themepalette.h"
 
 namespace bangke {
 namespace {
@@ -12,7 +15,7 @@ namespace {
 // 预览背板（mac 用固定灰，不随系统深浅漂移，便于并排比对）。
 const QColor kLightBackdrop(0xC0, 0xC0, 0xC0);
 const QColor kDarkBackdrop(0x69, 0x69, 0x69);
-constexpr int kStripHeight = 280;
+constexpr int kStripHeight = 176;
 constexpr int kBackdropRadius = 10;
 
 struct Row {
@@ -22,6 +25,7 @@ struct Row {
   bool highlighted = false;
   bool accentComment = false;
   qreal width = 0;  // 不含 textMargin
+  QList<QPair<QString,int>> runs;
 };
 
 struct Layout {
@@ -31,6 +35,9 @@ struct Layout {
   qreal rowWidth = 0;    // 竖排取最宽行；横排取总宽
   qreal rowHeight = 0;   // 竖排取总高；横排取最高行
   QSizeF panelSize;
+  qreal preeditHeight = 0;
+  qreal pagingHeight = 0;
+  QString preedit;
 };
 
 Layout computeLayout(const PanelSpec& spec, const PreviewSamples& samples) {
@@ -41,11 +48,10 @@ Layout computeLayout(const PanelSpec& spec, const PreviewSamples& samples) {
 
   const bool showPreedit = !spec.inlinePreedit && !samples.preedit.isEmpty();
   if (showPreedit) {
-    Row row;
-    row.text = samples.preedit;
-    row.width = fm.horizontalAdvance(row.text);
-    layout.rows << row;
+    layout.preedit = samples.preedit;
+    layout.preeditHeight = qMax(fm.height()+2,fm.height()+spec.preeditSpacing);
   }
+  layout.pagingHeight = spec.showPaging ? 24 : 0;
   const int count = qMin(samples.pageSize, samples.candidates.size());
   for (int i = 0; i < count; ++i) {
     const PreviewCandidate& candidate = samples.candidates.at(i);
@@ -59,6 +65,32 @@ Layout computeLayout(const PanelSpec& spec, const PreviewSamples& samples) {
                 fm.horizontalAdvance(row.text);
     if (!row.comment.isEmpty()) {
       row.width += layout.gap + fm.horizontalAdvance(row.comment);
+    }
+    if (spec.customPanel) {
+      QString label = row.label;
+      if (label.endsWith(QLatin1Char('.'))) label.chop(1);
+      const QRegularExpression token(QStringLiteral("\\[(label|candidate|comment)\\]"));
+      auto matches = token.globalMatch(spec.candidateFormat);
+      int end = 0;
+      row.width = 0;
+      const auto append = [&](const QString& text,int role) {
+        QString display = text;
+        if (spec.verticalText) {
+          QStringList chars;for (uint ch : text.toUcs4()) chars << QString::fromUcs4(&ch,1);
+          display=chars.join(QLatin1Char('\n'));
+          qreal width=0;for (const auto& ch: chars) width=qMax(width,fm.horizontalAdvance(ch));
+          row.width += width;
+          layout.fontHeight=qMax(layout.fontHeight,fm.height()*chars.size());
+        } else row.width += fm.horizontalAdvance(text);
+        row.runs.append({display,role});
+      };
+      while (matches.hasNext()) {
+        const auto m=matches.next();append(spec.candidateFormat.mid(end,m.capturedStart()-end),1);
+        const QString key=m.captured(1);
+        append(key=="label"?label:key=="comment"?row.comment:row.text,key=="label"?0:key=="comment"?2:1);
+        end=m.capturedEnd();
+      }
+      append(spec.candidateFormat.mid(end),1);
     }
     layout.rows << row;
   }
@@ -80,8 +112,8 @@ Layout computeLayout(const PanelSpec& spec, const PreviewSamples& samples) {
   layout.rowWidth = contentWidth;
   layout.rowHeight = contentHeight;
   layout.panelSize = QSizeF(
-      contentWidth + spec.contentMargin.left() + spec.contentMargin.right(),
-      contentHeight + spec.contentMargin.top() + spec.contentMargin.bottom());
+      qMax(contentWidth,layout.preedit.isEmpty()?0:fm.horizontalAdvance(layout.preedit)+24) + spec.contentMargin.left() + spec.contentMargin.right(),
+      contentHeight + layout.preeditHeight + layout.pagingHeight + spec.contentMargin.top() + spec.contentMargin.bottom());
   return layout;
 }
 
@@ -90,7 +122,29 @@ void drawRun(QPainter* painter, const PanelSpec& spec, const QString& text,
   if (text.isEmpty()) return;
   painter->setFont(spec.font);
   painter->setPen(color);
-  painter->drawText(QPointF(x, baseline), text);
+  if (spec.verticalText) {
+    const QFontMetricsF fm(spec.font);qreal y=baseline;
+    for (const auto& line:text.split(QLatin1Char('\n'))) {painter->drawText(QPointF(x,y),line);y+=fm.height();}
+  } else painter->drawText(QPointF(x, baseline), text);
+}
+
+QPainterPath highlightPath(const QRectF& box, const QRectF& panel, qreal outer, qreal inner) {
+  const auto near=[](qreal a,qreal b) {return qAbs(a-b)<.01;};
+  const qreal limit=qMin(box.width(),box.height())/2;
+  inner=0;outer=qMin(outer,limit);  // Continuous attached highlight has square internal boundaries.
+  const bool l=near(box.left(),panel.left()),r=near(box.right(),panel.right());
+  const bool t=near(box.top(),panel.top()),b=near(box.bottom(),panel.bottom());
+  const qreal tl=l&&t?outer:inner,tr=r&&t?outer:inner,br=r&&b?outer:inner,bl=l&&b?outer:inner;
+  QPainterPath path;
+  path.moveTo(box.left()+tl,box.top());path.lineTo(box.right()-tr,box.top());
+  if(tr) path.arcTo(QRectF(box.right()-2*tr,box.top(),2*tr,2*tr),90,-90);
+  path.lineTo(box.right(),box.bottom()-br);
+  if(br) path.arcTo(QRectF(box.right()-2*br,box.bottom()-2*br,2*br,2*br),0,-90);
+  path.lineTo(box.left()+bl,box.bottom());
+  if(bl) path.arcTo(QRectF(box.left(),box.bottom()-2*bl,2*bl,2*bl),270,-90);
+  path.lineTo(box.left(),box.top()+tl);
+  if(tl) path.arcTo(QRectF(box.left(),box.top(),2*tl,2*tl),180,-90);
+  path.closeSubpath();return path;
 }
 
 void drawPanel(QPainter* painter, const PanelSpec& spec,
@@ -99,39 +153,83 @@ void drawPanel(QPainter* painter, const PanelSpec& spec,
   const QFontMetricsF fm(spec.font);
   const qreal ascent = fm.ascent();
 
-  // 面板底：与落盘同一份九宫格绘制。
-  ninegrid::paintTile(painter, panelBackgroundImage(spec), panel,
-                      spec.backgroundMargin);
+  painter->save();
+  QPainterPath outline;
+  outline.addRoundedRect(panel, spec.cornerRadius, spec.cornerRadius);
+  painter->setClipPath(outline, Qt::IntersectClip);
+  const qreal ratio = painter->device()->devicePixelRatioF();
+  QImage background(QSize(qCeil(panel.width()*ratio),qCeil(panel.height()*ratio)),QImage::Format_ARGB32_Premultiplied);
+  background.setDevicePixelRatio(ratio);
+  background.fill(Qt::transparent);
+  QPainter fills(&background);
+  fills.setRenderHints(painter->renderHints());
+  fills.translate(-panel.topLeft());
+  fills.setClipPath(outline);
+  fills.fillPath(outline,spec.panelBackground);
 
   qreal cursorX = panel.left() + spec.contentMargin.left();
-  qreal cursorY = panel.top() + spec.contentMargin.top();
+  qreal cursorY = panel.top() + spec.contentMargin.top() + layout.preeditHeight;
 
+
+  int rowIndex = 0;
+  for (const Row& row : layout.rows) {
+
+    if (row.highlighted) {
+      QRectF box;
+      if (spec.vertical) {
+        const qreal top = rowIndex == 0 ? panel.top()+layout.preeditHeight : cursorY;
+        const qreal bottom = rowIndex == layout.rows.size() - 1 ? panel.bottom()-layout.pagingHeight
+            : cursorY + layout.fontHeight + spec.textMargin.top() + spec.textMargin.bottom();
+        box = QRectF(panel.left(), top, panel.width(), bottom - top);
+      } else {
+        const qreal left = rowIndex == 0 ? panel.left() : cursorX;
+        const qreal right = rowIndex == layout.rows.size() - 1 ? panel.right()
+            : cursorX + row.width + spec.textMargin.left() + spec.textMargin.right();
+        box = QRectF(left,panel.top()+layout.preeditHeight,right-left,panel.height()-layout.preeditHeight-layout.pagingHeight);
+      }
+      if (spec.shadowSize > 0) {
+        for (int spread=qMin(30,spec.shadowSize);spread>0;--spread) {
+          fills.setPen(Qt::NoPen);fills.setBrush(QColor(0,0,0,6));
+          fills.drawRoundedRect(box.adjusted(-spread/2.0,-spread/2.0,spread/2.0,spread/2.0),spec.highlightCornerRadius+spread/2.0,spec.highlightCornerRadius+spread/2.0);
+        }
+      }
+      if (spec.mutualExclusive) fills.setCompositionMode(QPainter::CompositionMode_Source);
+      fills.setPen(Qt::NoPen);fills.setBrush(spec.highlightBackground);
+      fills.drawPath(highlightPath(box,panel,spec.cornerRadius,spec.highlightCornerRadius));
+      fills.setCompositionMode(QPainter::CompositionMode_SourceOver);
+
+    }
+
+    if (spec.vertical) cursorY += layout.fontHeight + spec.textMargin.top() + spec.textMargin.bottom();
+    else cursorX += row.width + spec.textMargin.left() + spec.textMargin.right();
+    ++rowIndex;
+  }
+  fills.end();
+  painter->save();
+  painter->setOpacity(painter->opacity()*spec.backgroundOpacity);
+  painter->drawImage(panel.topLeft(),background);
+  painter->restore();
+  if (!layout.preedit.isEmpty()) drawRun(painter,spec,layout.preedit,panel.left()+12,panel.top()+fm.ascent()+2,spec.normalText);
+  cursorX = panel.left() + spec.contentMargin.left();
+  cursorY = panel.top() + spec.contentMargin.top() + layout.preeditHeight;
   for (const Row& row : layout.rows) {
     const qreal textX = cursorX + spec.textMargin.left();
     const qreal textTop = cursorY + spec.textMargin.top();
-
-    if (row.highlighted) {
-      QRectF box(textX, textTop, row.width, layout.fontHeight);
-      box.adjust(-spec.highlightMargin.left(), -spec.highlightMargin.top(),
-                 spec.highlightMargin.right(), spec.highlightMargin.bottom());
-      if (spec.fullWidthHighlight) {
-        box.setLeft(panel.left() + spec.contentMargin.left() -
-                    spec.highlightMargin.left());
-        box.setRight(panel.right() - spec.contentMargin.right() +
-                     spec.highlightMargin.right());
-      }
-      // 不裁剪：真面板的窗口不是圆角形状（theme.mask() 只用于模糊），
-      // 高亮就是照实画上去的。预览也不要裁，否则两边不一致。
-      ninegrid::paintTile(painter, panelHighlightImage(spec), box,
-                          spec.highlightMargin);
-    }
-
     const QColor rowColor =
         row.highlighted ? spec.highlightCandidateText : spec.normalText;
     const QColor commentColor = row.accentComment ? spec.highlightText : rowColor;
 
     qreal x = textX;
     const qreal baseline = textTop + ascent;
+    if (!row.runs.isEmpty()) {
+      for (const auto& run : row.runs) {
+        QColor color=rowColor;
+        if (run.second==0) color=row.highlighted?spec.selectedLabelText:spec.labelText;
+        if (run.second==2) color=row.highlighted?spec.selectedCommentText:spec.commentText;
+        drawRun(painter,spec,run.first,x,baseline,color);
+        qreal width=0;for (const auto& line:run.first.split(QLatin1Char('\n'))) width=qMax(width,fm.horizontalAdvance(line));x+=width;
+      }
+    } else {
     drawRun(painter, spec, row.label, x, baseline, rowColor);
     x += fm.horizontalAdvance(row.label);
     if (!row.label.isEmpty()) x += layout.gap;
@@ -142,13 +240,20 @@ void drawPanel(QPainter* painter, const PanelSpec& spec,
       drawRun(painter, spec, row.comment, x, baseline, commentColor);
     }
 
+    }
     if (spec.vertical) {
       cursorY += layout.fontHeight + spec.textMargin.top() +
                  spec.textMargin.bottom();
     } else {
       cursorX += row.width + spec.textMargin.left() + spec.textMargin.right();
     }
+    ++rowIndex;
   }
+  if (layout.pagingHeight) drawRun(painter,spec,QStringLiteral("‹     ›"),panel.left()+12,panel.bottom()-5,spec.normalText);
+  if (spec.borderWidth > 0) {
+    painter->setPen(QPen(spec.panelBorder,spec.borderWidth));painter->setBrush(Qt::NoBrush);painter->drawPath(outline);
+  }
+  painter->restore();
 }
 
 }  // namespace
@@ -235,8 +340,8 @@ void PreviewStrip::paintEvent(QPaintEvent*) {
   painter.setClipPath(clip);
 
   for (const auto& half :
-       {qMakePair(lightRect, qMakePair(kLightBackdrop, light_)),
-        qMakePair(darkRect, qMakePair(kDarkBackdrop, dark_))}) {
+       {qMakePair(lightRect, qMakePair(palette::card(this), light_)),
+        qMakePair(darkRect, qMakePair(palette::sidebar(this), dark_))}) {
     painter.fillRect(half.first, half.second.first);
     renderPanel(&painter, half.second.second, samples_,
                 half.first.adjusted(16, 16, -16, -16));

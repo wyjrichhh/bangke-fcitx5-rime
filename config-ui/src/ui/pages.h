@@ -39,9 +39,7 @@ class TextRow;
 QString fcitxVersionString();
 bool fcitxSupportsDarkTheme();
 
-// 外观页：只放 classicui 真能生效的项。classicui 表达不出来的（单行排列、
-// 高亮圆角、叠加透明、候选格式模板、毛玻璃、记忆面板宽度）**不放**，
-// 免得出现「滑杆拉了半天面板不动」的死控件。
+// 外观页根据面板后端展示实际支持的选项。
 class AppearancePage : public PageScaffold {
   Q_OBJECT
  public:
@@ -65,10 +63,22 @@ class AppearancePage : public PageScaffold {
   SliderRow* transparency_ = nullptr;
   FontButton* font_ = nullptr;
   SliderRow* fontSize_ = nullptr;
+  ComboRow* candidateLayout_ = nullptr;
   ComboRow* orientation_ = nullptr;
   SliderRow* corner_ = nullptr;
   SliderRow* shadow_ = nullptr;
   SliderRow* border_ = nullptr;
+  SliderRow* borderHeight_ = nullptr;
+  SliderRow* highlightCorner_ = nullptr;
+  SliderRow* lineSpacing_ = nullptr;
+  SliderRow* spacing_ = nullptr;
+  ToggleRow* inlinePreedit_ = nullptr;
+  ToggleRow* inlineCandidate_ = nullptr;
+  ToggleRow* memorizeSize_ = nullptr;
+  ToggleRow* translucency_ = nullptr;
+  ToggleRow* mutualExclusive_ = nullptr;
+  TextRow* candidateFormat_ = nullptr;
+  bool customPanel_ = false;
   ToggleRow* showPaging_ = nullptr;
 };
 

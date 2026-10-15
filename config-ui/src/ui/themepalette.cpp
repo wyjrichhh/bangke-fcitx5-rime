@@ -1,142 +1,114 @@
 #include "themepalette.h"
 
-#include <QApplication>
-#include <QFile>
-#include <QHash>
-#include <QPalette>
-#include <QProcess>
 #include <QWidget>
+
+#include <algorithm>
 
 namespace bangke::palette {
 namespace {
 
-bool g_dark = false;
-
-// 系统深浅：先问 GNOME（gsettings），问不到再退回 Qt 调色板。
-bool detectDark() {
-  QProcess process;
-  process.start(QStringLiteral("gsettings"),
-                {QStringLiteral("get"), QStringLiteral("org.gnome.desktop.interface"),
-                 QStringLiteral("color-scheme")});
-  if (process.waitForFinished(1500)) {
-    const QString out = QString::fromLocal8Bit(process.readAllStandardOutput());
-    if (out.contains(QLatin1String("dark"))) return true;
-    if (out.contains(QLatin1String("light"))) return false;
-  }
-  return QApplication::palette().color(QPalette::Window).lightness() < 128;
+// 把一个颜色朝另一个颜色混，t = 0 全是 a、1 全是 b。只用于 hover 这类
+// 需要"比底色亮一点"的地方。
+QColor mix(const QColor& a, const QColor& b, double t) {
+  const double keep = 1.0 - std::clamp(t, 0.0, 1.0);
+  return QColor(qRound(a.red() * keep + b.red() * t),
+                qRound(a.green() * keep + b.green() * t),
+                qRound(a.blue() * keep + b.blue() * t));
 }
 
-bool onUbuntu() {
-  static const bool ubuntu = []() {
-    QFile file(QStringLiteral("/etc/os-release"));
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
-    return QString::fromUtf8(file.readAll()).contains(QLatin1String("ID=ubuntu"));
-  }();
-  return ubuntu;
-}
-
-// 系统强调色：GNOME 46 起有 accent-color，取不到（这台 24.04 就没有）时在
-// Ubuntu 上退回 Yaru 的橙 —— 比 Qt 默认那个蓝更像 Ubuntu 原生。
-QColor systemAccent() {
-  QProcess process;
-  process.start(QStringLiteral("gsettings"),
-                {QStringLiteral("get"), QStringLiteral("org.gnome.desktop.interface"),
-                 QStringLiteral("accent-color")});
-  if (process.waitForFinished(1500)) {
-    QString name = QString::fromLocal8Bit(process.readAllStandardOutput()).trimmed();
-    name.remove(QLatin1Char('\''));
-    static const QHash<QString, QColor> kAccents = {
-        {QStringLiteral("blue"), QColor(0x35, 0x84, 0xE4)},
-        {QStringLiteral("teal"), QColor(0x21, 0x9A, 0x8B)},
-        {QStringLiteral("green"), QColor(0x3A, 0x94, 0x4A)},
-        {QStringLiteral("yellow"), QColor(0xF5, 0xC2, 0x11)},
-        {QStringLiteral("orange"), QColor(0xE9, 0x54, 0x20)},
-        {QStringLiteral("red"), QColor(0xE0, 0x1B, 0x24)},
-        {QStringLiteral("pink"), QColor(0xD5, 0x61, 0x99)},
-        {QStringLiteral("purple"), QColor(0x91, 0x41, 0xAC)},
-        {QStringLiteral("slate"), QColor(0x6F, 0x83, 0x96)},
-    };
-    if (kAccents.contains(name)) return kAccents.value(name);
-  }
-  if (onUbuntu()) return QColor(0xE9, 0x54, 0x20);  // Yaru 的 Ubuntu 橙
-  const QColor pal = QApplication::palette().color(QPalette::Highlight);
-  return pal.isValid() ? pal : QColor(0x35, 0x84, 0xE4);
+// 落在强调色上的文字色：亮底配深字，否则配白字。Omarchy 的 accent 什么色都有
+// （黄的、浅蓝的都有），写死白色会出现白底白字。
+QColor onAccent(const QColor& accent) {
+  const double luminance = (0.299 * accent.red() + 0.587 * accent.green() +
+                            0.114 * accent.blue()) /
+                           255.0;
+  return luminance > 0.6 ? QColor(0x1A, 0x1A, 0x1A) : QColor(Qt::white);
 }
 
 }  // namespace
 
-void init() { g_dark = detectDark(); }
-
-bool dark() { return g_dark; }
+bool dark() { return appPlatformTheme().dark; }
 
 bool isDark(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark;
+  return appPlatformTheme().dark;
 }
 
-// 中性色取 Adwaita / Yaru 的常用值，而不是自己编的灰 —— 跟系统其它应用
-// 摆在一起才不违和。
 QColor window(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark ? QColor(0x33, 0x33, 0x33) : QColor(0xFC, 0xFC, 0xFC);
+  return appPlatformTheme().window;
 }
 
 QColor sidebar(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark ? QColor(0x3D, 0x3D, 0x3D) : QColor(0xF0, 0xF0, 0xF0);
+  return appPlatformTheme().sidebar;
 }
 
 QColor card(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark ? QColor(0x46, 0x46, 0x46) : QColor(0xFF, 0xFF, 0xFF);
+  return appPlatformTheme().card;
 }
 
 QColor separator(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark ? QColor(0xFF, 0xFF, 0xFF, 0x2B) : QColor(0x00, 0x00, 0x00, 0x1F);
+  return appPlatformTheme().separator;
 }
 
 QColor text(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark ? QColor(0xFF, 0xFF, 0xFF) : QColor(0x2E, 0x34, 0x36);
+  return appPlatformTheme().text;
 }
 
 QColor secondaryText(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark ? QColor(0xFF, 0xFF, 0xFF, 0xC4) : QColor(0x2E, 0x34, 0x36, 0x9E);
+  return mix(appPlatformTheme().text, appPlatformTheme().window, 0.35);
 }
 
 QColor accent(const QWidget* widget) {
   Q_UNUSED(widget);
-  static const QColor cached = systemAccent();
-  return cached;
+  return appPlatformTheme().accent;
 }
 
 QColor sidebarSelection(const QWidget* widget) {
-  QColor color = accent(widget);
-  color.setAlphaF(0.22);
-  return color;
+  Q_UNUSED(widget);
+  return appPlatformTheme().sidebarSelection;
 }
 
 QColor well(const QWidget* widget) {
   Q_UNUSED(widget);
-  return g_dark ? QColor(0x62, 0x62, 0x62) : QColor(0xDc, 0xDc, 0xDc);
+  return appPlatformTheme().well;
 }
 
 QString styleSheet(const QWidget* widget) {
-  const QString fg = text(widget).name();
-  const QString bg = window(widget).name();
-  const QString cardBg = card(widget).name();
-  const QString line = separator(widget).name(QColor::HexArgb);
-  const QString acc = accent(widget).name();
-  const QString wellColor = well(widget).name();
-  const QString hover = g_dark ? QStringLiteral("#525252") : QStringLiteral("#F0F0F0");
+  Q_UNUSED(widget);
+  const QString fg = text(nullptr).name();
+  const QString bg = window(nullptr).name();
+  const QString cardBg = card(nullptr).name();
+  const QString line = mix(card(nullptr), text(nullptr), 0.16).name();
+  const QString acc = accent(nullptr).name();
+  const QString wellColor = well(nullptr).name();
+  const QString onAcc = onAccent(accent(nullptr)).name();
+  // hover 底色原来写死成 #525252 / #F0F0F0（Adwaita 的两档）。有桌面主题时
+  // 由底色朝文字方向混出来，才跟着主题走。
+  const QString hover = appPlatformTheme().valid
+                            ? mix(card(nullptr), text(nullptr), 0.10).name()
+                            : (appPlatformTheme().dark ? QStringLiteral("#525252")
+                                            : QStringLiteral("#F0F0F0"));
 
   // 没有平台主题时 Qt 用 Fusion（浅色），深色系统下这些原生控件会亮得刺眼，
   // 所以把用到的都自己画一遍。
   return QStringLiteral(R"(
-QWidget { color: %1; }
+QWidget { color: %1; font-size: 13px; }
 QMainWindow, QStackedWidget { background: %2; }
+QWidget#brandNavigation { background: %10; }
+QLabel[secondary="true"] { color: %9; }
+QLabel#pageTitle { font-size: 26px; font-weight: 600; }
+QLabel#brandMark { color: %7; font-size: 76px; font-weight: 300; background: transparent; }
+QLabel#brandTitle { font-size: 23px; font-weight: 600; }
+QLabel#brandCaption { color: %9; font-size: 12px; line-height: 1.6; }
+QFrame#settingsGroup { background: %4; border: 1px solid %5; border-radius: 8px; }
+QLabel#sectionHeading { color: %7; border-bottom: 1px solid %5; font-size: 12px; }
+QWidget#settingsFooter { background: %2; border-top: 1px solid %5; }
 QScrollArea { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
@@ -144,23 +116,23 @@ QScrollBar::handle:vertical { background: %3; border-radius: 4px; min-height: 24
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
 QComboBox {
   background: %4; border: 1px solid %5; border-radius: 6px;
-  padding: 3px 8px; min-height: 24px;
+  padding: 7px 12px; min-height: 24px;
 }
 QComboBox:hover { background: %6; }
 QComboBox::drop-down { border: none; width: 18px; }
 QComboBox QAbstractItemView {
   background: %4; border: 1px solid %5; border-radius: 6px;
-  selection-background-color: %7; selection-color: white; outline: none;
+  selection-background-color: %7; selection-color: %8; outline: none;
 }
 QLineEdit {
-  background: %4; border: 1px solid %5; border-radius: 6px; padding: 4px 8px;
+  background: %4; border: 1px solid %5; border-radius: 6px; padding: 8px 12px;
 }
 QPushButton {
   background: %4; border: 1px solid %5; border-radius: 6px;
-  padding: 5px 16px; min-height: 22px;
+  padding: 8px 18px; min-height: 24px;
 }
 QPushButton:hover { background: %6; }
-QPushButton[primary="true"] { background: %7; border-color: %7; color: white; }
+QPushButton[primary="true"] { background: %7; border-color: %7; color: %8; }
 QPushButton[primary="true"]:hover { background: %7; }
 QCheckBox { spacing: 8px; }
 QCheckBox::indicator {
@@ -179,10 +151,11 @@ QListView, QListWidget {
 }
 QListView::item, QListWidget::item { padding: 4px 8px; border-radius: 4px; }
 QListView::item:hover, QListWidget::item:hover { background: %6; }
-QListView::item:selected, QListWidget::item:selected { background: %7; color: white; }
+QListView::item:selected, QListWidget::item:selected { background: %7; color: %8; }
 QToolTip { background: %4; color: %1; border: 1px solid %5; padding: 4px 6px; }
 )")
-      .arg(fg, bg, wellColor, cardBg, line, hover, acc);
+      .arg(fg, bg, wellColor, cardBg, line, hover, acc, onAcc, secondaryText(nullptr).name())
+      .arg(sidebar(nullptr).name());
 }
 
 }  // namespace bangke::palette

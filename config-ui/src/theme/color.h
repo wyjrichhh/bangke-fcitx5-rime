@@ -11,6 +11,9 @@ namespace bangke {
 // 退回 QColor 自己的解析（#RRGGBB / 名字），解析不了返回无效色。
 QColor parseRimeColor(const QString& spec);
 
+// Classic UI theme.conf uses #RRGGBBAA, unlike QColor’s #AARRGGBB.
+QColor parseFcitxColor(const QString& spec);
+
 // mac 的 fallback 混合：(前景×2 + 背景)/3，逐通道含 alpha。
 // 未显式给序号色的方案靠它让序号比正文浅一点。
 QColor blendMac(const QColor& fg, const QColor& bg);

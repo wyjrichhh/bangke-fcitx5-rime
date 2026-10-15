@@ -17,6 +17,9 @@ class RimeDeploy {
   static QString setAddonConfig(const QString& addon, const QVariantMap& values);
 
   static QString triggerDeploy();
+  static bool usesCustomPanel();
+  static QString setCustomPanelAppearance(const QString& appearance);
+  static QString setCustomPanelLayout(const QString& orientation);
 
   // 回读 fcitx5 自己认为的 addon 配置（GetConfig），用来判断 SetConfig 到底有没有被接受。
   // 真机上出现过「SetConfig 返回成功、文件里的值却全被重置」的情况，光看文件分不清

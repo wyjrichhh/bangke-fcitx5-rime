@@ -37,8 +37,17 @@ int maxSafeCornerRadiusPt() {
   return 0;
 }
 
+int maxSafeCornerRadiusPx(int borderWidthPx) {
+  const int inset = ninegrid::shapeInset(qMax(0, borderWidthPx), 0);
+  for (int radius = 40; radius > 0; --radius) {
+    if (2 * ninegrid::requiredMargin(radius, inset, 0) <= kMinPanelExtent)
+      return radius;
+  }
+  return 0;
+}
+
 PanelSpec buildPanelSpec(const SchemeColors& colors, const StyleOptions& style,
-                         const QFont& font) {
+                         const QFont& font, const PlatformMetrics& metrics) {
   PanelSpec spec;
   spec.font = font;
   spec.vertical = style.textOrientation == QLatin1String("vertical");
@@ -66,11 +75,22 @@ PanelSpec buildPanelSpec(const SchemeColors& colors, const StyleOptions& style,
   spec.highlightText = colors.accent;
   spec.highlightFill = QColor(Qt::transparent);
 
-  spec.cornerRadius = ptToPx(qMin(style.cornerRadius, maxSafeCornerRadiusPt()));
-  spec.highlightCornerRadius = ptToPx(style.hilitedCornerRadius);
+  // 边框先算：圆角的安全上限要看它（九宫格的角区 = 1.4×半径 + 边框外扩）。
   // mac：borderLineWidth = min(borderHeight, borderWidth)，≤0 就完全不画。
   const int borderPt = qMin(style.borderWidth, style.borderHeight);
-  spec.borderWidth = borderPt > 0 ? ptToPx(borderPt) : 0;
+  // 桌面给的是**像素**（Omarchy 的 [popups] border-width = 2），直接用它 —— 走
+  // pt 换算会掉精度（2px→2pt→3px）。-1 = 桌面没意见，退回 pt 那条老路。
+  const int borderPx = metrics.borderWidthPx >= 0
+                           ? metrics.borderWidthPx
+                           : (borderPt > 0 ? ptToPx(borderPt) : 0);
+  spec.borderWidth = borderPx;
+
+  // 圆角同理：decoration:rounding 是 Hyprland 的像素整数，别拿它绕一圈 pt。
+  // -1 = 桌面没意见（或用户在补丁里自己设过），退回老路，一个字都不改。
+  spec.cornerRadius = metrics.cornerRadiusPx >= 0
+                          ? qMin(metrics.cornerRadiusPx, maxSafeCornerRadiusPx(borderPx))
+                          : ptToPx(qMin(style.cornerRadius, maxSafeCornerRadiusPt()));
+  spec.highlightCornerRadius = ptToPx(style.hilitedCornerRadius);
   spec.shadowSize = style.shadowSize > 0 ? ptToPx(style.shadowSize) : 0;
 
   // 关键：**面板的内边距放在单元格里，而不是 contentMargin**。
@@ -98,7 +118,10 @@ PanelSpec buildPanelSpec(const SchemeColors& colors, const StyleOptions& style,
   // 带高：连续圆角曲线在 x=0 处的高度是 1.4r，但允许亚像素级擦边，
   // 取 0.55r + 2（半径 9px → 7px）就够，肉眼看不到露边。
   const int cornerBand = qCeil(spec.cornerRadius * 0.55) + 2;
-  const int pad = qMax(2, lineSpacing / 2);  // 高亮块里文字四周的呼吸位
+  // 高亮块里文字四周的呼吸位。桌面给得出度量时用它（Omarchy 的
+  // [spacing] control-padding-y），否则按 mac 的 line_spacing 推。
+  const int pad = metrics.textPadPx >= 0 ? qMax(1, metrics.textPadPx)
+                                         : qMax(2, lineSpacing / 2);
   spec.contentMargin = QMargins(0, cornerBand, 0, cornerBand);
   spec.textMargin = uniform(pad);
   spec.highlightMargin = uniform(pad);  // 左/右因此正好贴到面板边缘

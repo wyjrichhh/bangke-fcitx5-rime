@@ -1,4 +1,9 @@
 #include "ui/pages.h"
+#include "rimedeploy.h"
+#include <QLineEdit>
+#include <QFileSystemWatcher>
+#include <QTimer>
+#include <QApplication>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -125,9 +130,36 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
     : PageScaffold(QStringLiteral("外观"), QStringLiteral("配色、字体与候选面板"),
                    parent),
       config_(config) {
+  customPanel_ = RimeDeploy::usesCustomPanel() || config.platform().source == ThemeSource::Omarchy;
   preview_ = new PreviewStrip(this);
-  addWidget(preview_);
-  addSpacing(14);
+  addFixedWidget(preview_);
+  if (customPanel_) {
+    auto* watcher = new QFileSystemWatcher(this);
+    auto* settle = new QTimer(this);
+    settle->setSingleShot(true);
+    settle->setInterval(250);
+    auto watchTheme = [watcher]() {
+      if (!watcher->directories().isEmpty()) watcher->removePaths(watcher->directories());
+      const QString theme = paths::omarchyThemeDir();
+      const QDir current(QFileInfo(theme).absolutePath());
+      QStringList dirs{current.absolutePath(), current.absoluteFilePath(QStringLiteral("..")),theme};
+      for (const QString& path : dirs) if (QFileInfo(path).isDir()) watcher->addPath(path);
+    };
+    watchTheme();
+    connect(watcher,&QFileSystemWatcher::directoryChanged,settle,[settle]() {settle->start();});
+    connect(settle,&QTimer::timeout,this,[this,watchTheme]() {
+      watchTheme();
+      const auto theme = currentPlatformTheme();
+      if (theme.source != ThemeSource::Omarchy) return;
+      setAppPlatformTheme(theme);
+      config_ = BangkeConfig::load(paths::sharedBangkeYaml(), paths::customBangkeYaml(),theme);
+      qApp->setStyleSheet(palette::styleSheet(nullptr));
+      // Only refresh rendering; retain every unsaved control value.
+      updatePreview();
+      window()->update();
+    });
+  }
+
 
   QStringList schemeNames;
   QStringList schemeIds;
@@ -137,10 +169,10 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   }
 
   addSection(QStringLiteral("颜色"));
-  scheme_ = new ComboRow(QStringLiteral("配色方案"), QString(), schemeNames,
+  scheme_ = new ComboRow(QStringLiteral("配色方案"), customPanel_ ? QStringLiteral("选择「跟随 Omarchy 系统主题」自动切换；选择具体配色则固定使用。") : QString(), schemeNames,
                          schemeIds, style.colorScheme, this);
   addRow(scheme_);
-  if (fcitxSupportsDarkTheme()) {
+  if (customPanel_ || fcitxSupportsDarkTheme()) {
     QStringList darkNames{QStringLiteral("跟随浅色方案")};
     QStringList darkIds{QString()};
     darkNames += schemeNames;
@@ -153,7 +185,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   }
   transparency_ = new SliderRow(
       QStringLiteral("背景透明度"),
-      QStringLiteral("0 为不透明。"),
+      customPanel_ ? QStringLiteral("0 为不透明。统一调整背景、高亮底与阴影；文字和边框保持清晰。") : QStringLiteral("0 为不透明。"),
       0.0, 0.95, 0.05, 1.0 - style.alpha, QString(), this);
   addRow(transparency_);
 
@@ -165,9 +197,13 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   addRow(fontSize_);
 
   addSection(QStringLiteral("布局"));
+  if (customPanel_) {
+    candidateLayout_ = new ComboRow(QStringLiteral("候选排列"),QStringLiteral("候选列表排列方向，与每个候选中文字的方向分别设置。"),{QStringLiteral("横排一行"),QStringLiteral("竖排一列")},{QStringLiteral("linear"),QStringLiteral("stacked")},style.candidateListLayout,this);
+    addRow(candidateLayout_);
+  }
   orientation_ = new ComboRow(
-      QStringLiteral("候选排列"),
-      QStringLiteral("竖排一列显示；关闭则横排一行。"),
+      customPanel_ ? QStringLiteral("文字方向") : QStringLiteral("候选排列"),
+      customPanel_ ? QStringLiteral("横向阅读或逐字纵向排版。") : QStringLiteral("竖排一列显示；关闭则横排一行。"),
       {QStringLiteral("横排"), QStringLiteral("竖排")},
       {QStringLiteral("horizontal"), QStringLiteral("vertical")},
       style.textOrientation, this);
@@ -175,8 +211,8 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   corner_ = new SliderRow(
       QStringLiteral("圆角半径"),
       QStringLiteral("候选面板的圆角半径。"),
-      0, bangke::maxSafeCornerRadiusPt(), 1, style.cornerRadius, QStringLiteral(" pt"),
-      this);
+      0, customPanel_ ? 30 : qMax(bangke::maxSafeCornerRadiusPt(), style.cornerRadius), 1,
+      style.cornerRadius, QStringLiteral(" pt"), this);
   addRow(corner_);
   shadow_ = new SliderRow(
       QStringLiteral("阴影大小"),
@@ -188,6 +224,22 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
       QStringLiteral("0 为不画边框，颜色取自配色方案。"),
       0, 20, 1, qMax(0, style.borderWidth), QStringLiteral(" pt"), this);
   addRow(border_);
+  if (customPanel_) {
+    borderHeight_ = new SliderRow(QStringLiteral("边框高度"), QStringLiteral("与边框宽度取较小值作为描边粗细；0 关闭描边。"), 0, 20, 1, qMax(0, style.borderHeight), QStringLiteral(" pt"), this);
+    highlightCorner_ = new SliderRow(QStringLiteral("高亮圆角"), QStringLiteral("贴边高亮跟随面板圆角，内部保持直角；此独立圆角值保留供其他面板使用。"), 0, 30, 1, style.hilitedCornerRadius, QStringLiteral(" pt"), this);
+    highlightCorner_->setEnabled(false);
+    lineSpacing_ = new SliderRow(QStringLiteral("行间距"), QString(), -10, 30, 1, style.lineSpacing, QStringLiteral(" pt"), this);
+    spacing_ = new SliderRow(QStringLiteral("预编辑间距"), QStringLiteral("拼音显示在面板时，与候选之间的距离。"), -10, 30, 1, style.spacing, QStringLiteral(" pt"), this);
+    for (auto* row : {borderHeight_, highlightCorner_, lineSpacing_, spacing_}) addRow(row);
+    inlinePreedit_ = new ToggleRow(QStringLiteral("在输入框中显示预编辑"), QStringLiteral("关闭后拼音显示在候选面板顶部。"), style.inlinePreedit, this);
+    inlineCandidate_ = new ToggleRow(QStringLiteral("在输入框中显示选中候选"), QStringLiteral("应用支持预编辑且上项开启时生效。"), style.inlineCandidate, this);
+    memorizeSize_ = new ToggleRow(QStringLiteral("记忆本次输入的面板宽度"), QStringLiteral("连续输入时只扩宽，结束本次输入后重置，减少晃动。"), style.memorizeSize, this);
+    translucency_ = new ToggleRow(QStringLiteral("毛玻璃背景"),QStringLiteral("由 Hyprland 绘制；系统模糊需开启，并将背景透明度调高于 0。"),style.translucency,this);
+    mutualExclusive_ = new ToggleRow(QStringLiteral("避免透明颜色叠加"), QStringLiteral("高亮区域直接显示高亮色，不透出面板底色。"), style.mutualExclusive, this);
+    for (auto* row : {inlinePreedit_, inlineCandidate_, memorizeSize_, mutualExclusive_, translucency_}) addRow(row);
+    candidateFormat_ = new TextRow(QStringLiteral("候选格式"), QStringLiteral("支持 [label]、[candidate]、[comment]，例如 [label]. [candidate] [comment]。"), style.candidateFormat, this);
+    addRow(candidateFormat_);
+  }
 
   addSection(QStringLiteral("显示"));
   showPaging_ = new ToggleRow(
@@ -203,7 +255,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   };
   for (QWidget* control :
        {static_cast<QWidget*>(scheme_), static_cast<QWidget*>(schemeDark_),
-        static_cast<QWidget*>(orientation_)}) {
+        static_cast<QWidget*>(orientation_), static_cast<QWidget*>(candidateLayout_)}) {
     if (auto* row = qobject_cast<ComboRow*>(control))
       connect(row->combo(), qOverload<int>(&QComboBox::currentIndexChanged), this,
               [notify](int) { notify(); });
@@ -221,6 +273,13 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
             [notify](bool) { notify(); });
   }
 
+  if (customPanel_) {
+    for (auto* row : {borderHeight_, highlightCorner_, lineSpacing_, spacing_})
+      connect(row, &SliderRow::valueChanged, this, [notify](double) { notify(); });
+    for (auto* row : {inlinePreedit_, inlineCandidate_, memorizeSize_, mutualExclusive_, translucency_})
+      connect(row->toggle(), &QAbstractButton::toggled, this, [notify](bool) { notify(); });
+    connect(candidateFormat_->findChild<QLineEdit*>(), &QLineEdit::textChanged, this, [notify](const QString&) { notify(); });
+  }
   updatePreview();
 }
 
@@ -238,6 +297,19 @@ StyleOptions AppearancePage::style() const {
   out.borderWidth = int(border_->value());
   out.borderHeight = int(border_->value());
   out.showPaging = showPaging_->isChecked();
+  if (customPanel_) {
+    out.candidateListLayout = candidateLayout_->currentValue();
+    out.borderHeight = int(borderHeight_->value());
+    out.hilitedCornerRadius = int(highlightCorner_->value());
+    out.lineSpacing = int(lineSpacing_->value());
+    out.spacing = int(spacing_->value());
+    out.inlinePreedit = inlinePreedit_->isChecked();
+    out.inlineCandidate = inlineCandidate_->isChecked();
+    out.memorizeSize = memorizeSize_->isChecked();
+    out.translucency = translucency_->isChecked();
+    out.mutualExclusive = mutualExclusive_->isChecked();
+    out.candidateFormat = candidateFormat_->text();
+  }
   return out;
 }
 
@@ -252,6 +324,19 @@ void AppearancePage::setStyle(const StyleOptions& style) {
   shadow_->setValue(style.shadowSize);
   border_->setValue(qMax(0, style.borderWidth));
   showPaging_->setChecked(style.showPaging);
+  if (customPanel_) {
+    candidateLayout_->setCurrentValue(style.candidateListLayout);
+    borderHeight_->setValue(qMax(0, style.borderHeight));
+    highlightCorner_->setValue(style.hilitedCornerRadius);
+    lineSpacing_->setValue(style.lineSpacing);
+    spacing_->setValue(style.spacing);
+    inlinePreedit_->setChecked(style.inlinePreedit);
+    inlineCandidate_->setChecked(style.inlineCandidate);
+    memorizeSize_->setChecked(style.memorizeSize);
+    translucency_->setChecked(style.translucency);
+    mutualExclusive_->setChecked(style.mutualExclusive);
+    candidateFormat_->setText(style.candidateFormat);
+  }
   updatePreview();
 }
 
@@ -312,9 +397,9 @@ AiPage::AiPage(const RimeData& data, QWidget* parent)
                            this);
   addRow(enabled_);
   device_ = new ComboRow(QStringLiteral("推理设备"),
-                         QStringLiteral("CUDA 需要可用的 GPU。"),
-                         {QStringLiteral("CPU"), QStringLiteral("CUDA (GPU)")},
-                         {QStringLiteral("cpu"), QStringLiteral("cuda")}, ai.device,
+                         QStringLiteral("当前发行包使用 CPU 推理。"),
+                         {QStringLiteral("CPU")},
+                         {QStringLiteral("cpu")}, QStringLiteral("cpu"),
                          this);
   addRow(device_);
 
@@ -395,7 +480,7 @@ void AiPage::pickModelDir() {
   }
   // 预检：插件要求目录成套，缺件会在启动时直接关掉 AI 预测。先拦住，别让用户
   // 存进一个必然失败的路径（错误信息要好懂，不是让他去看日志）。
-  const QStringList need{QStringLiteral("model.bin"),
+  const QStringList need{QStringLiteral("model.bin"), QStringLiteral("config.json"),
                          QStringLiteral("tokenizer.json"),
                          QStringLiteral("shared_vocabulary.json")};
   QStringList missing;
@@ -407,7 +492,7 @@ void AiPage::pickModelDir() {
   if (!missing.isEmpty()) {
     QMessageBox::warning(
         this, QStringLiteral("模型目录不完整"),
-        QStringLiteral("这个目录里缺少：%1\n\n模型目录必须成套 —— model.bin、"
+        QStringLiteral("这个目录里缺少：%1\n\n模型目录必须成套 —— model.bin、config.json、"
                        "tokenizer.json、shared_vocabulary.json 三者要来自同一个模型。")
             .arg(missing.join(QStringLiteral("、"))));
     return;
@@ -444,7 +529,7 @@ SchemasPage::SchemasPage(const RimeData& data, QWidget* parent)
   for (const SchemaSettings& schema : schemas_) {
     auto* row = new QWidget(this);
     auto* layout = new QHBoxLayout(row);
-    layout->setContentsMargins(0, 8, 0, 8);
+    layout->setContentsMargins(18, 12, 18, 12);
     auto* enabled = new QCheckBox(schemaDisplayName(schema.name), row);
     enabled->setToolTip(schema.name);
     enabled->setChecked(schema.enabled);
@@ -487,38 +572,19 @@ void SchemasPage::collect(RimeData* data) {
 // ── 关于页 ───────────────────────────────────────────────────────
 
 AboutPage::AboutPage(QWidget* parent)
-    : PageScaffold(QStringLiteral("关于"), QString(), parent) {
-  addSpacing(24);
-  auto* icon = new QLabel(this);
-  const QIcon themeIcon = QIcon::fromTheme(QStringLiteral("fcitx-rime"));
-  if (!themeIcon.isNull())
-    icon->setPixmap(themeIcon.pixmap(96, 96));
-  icon->setAlignment(Qt::AlignCenter);
-  addWidget(icon);
-
-  auto* name = new QLabel(QStringLiteral("蚌壳拼音"), this);
-  QFont nameFont = name->font();
-  nameFont.setPointSizeF(nameFont.pointSizeF() + 4);
-  nameFont.setBold(true);
-  name->setFont(nameFont);
-  name->setAlignment(Qt::AlignCenter);
-  addSpacing(10);
-  addWidget(name);
-
-  QStringList lines;
+    : PageScaffold(QStringLiteral("关于蚌壳拼音"),
+                   QStringLiteral("基于 Rime 的本地 AI 输入法"), parent) {
+  addSection(QStringLiteral("版本信息"));
   const QString version = addonVersion();
-  if (!version.isEmpty())
-    lines << QStringLiteral("版本 %1").arg(version);
+  addRow(new RowShell(QStringLiteral("蚌壳拼音"), QString(),
+                     new QLabel(version.isEmpty() ? QStringLiteral("开发版本") : version, this), this));
   const QString fcitx = fcitxVersionString();
-  if (!fcitx.isEmpty())
-    lines << QStringLiteral("fcitx5 %1").arg(fcitx);
-  auto* detail = new QLabel(lines.join(QStringLiteral(" · ")), this);
-  detail->setAlignment(Qt::AlignCenter);
-  QPalette pal = detail->palette();
-  pal.setColor(QPalette::WindowText, palette::secondaryText(detail));
-  detail->setPalette(pal);
-  addWidget(detail);
-
+  addRow(new RowShell(QStringLiteral("输入法框架"), QString(),
+                     new QLabel(fcitx.isEmpty() ? QStringLiteral("fcitx5")
+                                               : QStringLiteral("fcitx5 %1").arg(fcitx), this), this));
+  addSection(QStringLiteral("运行方式"));
+  addRow(new RowShell(QStringLiteral("本地推理"),
+                     QStringLiteral("AI 模型在本机运行，输入内容不上传。"), nullptr, this));
 }
 
 }  // namespace bangke

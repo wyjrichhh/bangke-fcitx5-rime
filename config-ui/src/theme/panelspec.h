@@ -7,6 +7,7 @@
 #include <QMargins>
 #include <QString>
 
+#include "platformtheme.h"
 #include "scheme.h"
 
 namespace bangke {
@@ -18,6 +19,7 @@ namespace bangke {
 // 就是写进主题的那些，不是另算一遍 mac 的 style。
 struct PanelSpec {
   QColor panelBackground;
+  double backgroundOpacity = 1.0;  // Complete custom-panel fill stack, excluding text/border.
   QColor panelBorder;             // 无效色 = 不画边框
   QColor normalText;              // 候选文字 + 预编辑（classicui 同一个键）
   QColor highlightText;           // HighLight 标记文字的前景（AI 强调注释）
@@ -35,6 +37,15 @@ struct PanelSpec {
   QMargins highlightMargin;       // 高亮九宫格切片 = 相对文字的外扩量
 
   QFont font;
+  QColor labelText;
+  QColor selectedLabelText;
+  QColor commentText;
+  QColor selectedCommentText;
+  QString candidateFormat;
+  int preeditSpacing = 0;
+  bool customPanel = false;
+  bool verticalText = false;
+  bool mutualExclusive = false;
   bool vertical = false;
   bool fullWidthHighlight = false;
   bool showPaging = false;
@@ -56,8 +67,16 @@ int ptToPx(double pt);
 // 最大值（不是钳死用户的值，而是根本不让他设到会坏的程度）。
 int maxSafeCornerRadiusPt();
 
+// 同上，但按**真实**边框宽度算，且以像素为单位。
+//
+// 上面那个 pt 版是按「边框拉到滑杆上限」这种最坏情况推的，所以在默认边框下
+// 算出来的上限小得离谱（≈4pt），滑杆拉到一半就到底了。这条给的是实际能用的上限：
+// 桌面给圆角（Omarchy 的 decoration:rounding）时用它。
+int maxSafeCornerRadiusPx(int borderWidthPx);
+
 PanelSpec buildPanelSpec(const SchemeColors& colors, const StyleOptions& style,
-                         const QFont& font);
+                         const QFont& font,
+                         const PlatformMetrics& metrics = PlatformMetrics());
 
 // 面板底图 / 高亮块图。落盘与预览共用这两个函数 —— 预览画的图和真面板
 // 用的是同一份绘制代码，不存在"预览一套、实机一套"。

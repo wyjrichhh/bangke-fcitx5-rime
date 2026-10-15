@@ -19,10 +19,11 @@
 # 只改了私有代码（比如 config-ui）时用 SKIP_LIBRIME=1 跳过最慢的 librime 重建
 # （librime 与 CT2 的构建树留在 /out 里复用）。
 set -euo pipefail
+JOBS="${JOBS:-4}"
 export DEBIAN_FRONTEND=noninteractive
 SKIP_LIBRIME="${SKIP_LIBRIME:-0}"
 
-echo "=== [1/5] 安装 Ubuntu 22.04 依赖 ==="
+echo "=== [1/5] 安装 Ubuntu 构建依赖 ==="
 apt-get update -qq
 apt-get install -y -qq \
   cmake ninja-build build-essential pkg-config ca-certificates \
@@ -59,7 +60,7 @@ else
     -DOPENMP_RUNTIME=NONE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
     -DCMAKE_INSTALL_RPATH=/usr/lib/fcitx5-rime-ai -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     "${CMAKE_OLD_POLICY[@]}"
-  cmake --build build -j "$(nproc)"
+  cmake --build build -j "$JOBS"
   cmake --build build --target install
 
   echo "=== [3/5] 构建 librime + 插件 ==="
@@ -90,7 +91,7 @@ else
     -DBUILD_TEST=OFF -DBUILD_SAMPLE=OFF -DCTRANSLATE2_ROOT=/usr/local \
     -DBoost_NO_BOOST_CMAKE=ON \
     -DLUA_VERSION=lua5.4 "${CMAKE_OLD_POLICY[@]}"
-  ninja -C build -j "$(nproc)"
+  ninja -C build -j "$JOBS"
   cmake --install build
 fi
 
@@ -113,13 +114,13 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 rm -rf build
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH=/usr/local -DRIME_DATA_DIR=/usr/share/rime-data "${CMAKE_OLD_POLICY[@]}"
-ninja -C build -j "$(nproc)"
+ninja -C build -j "$JOBS"
 
 echo "=== [5/5] 构建 config-ui (Qt5) ==="
 rm -rf /priv/config-ui/build
 cmake -S /priv/config-ui -B /priv/config-ui/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr
-ninja -C /priv/config-ui/build -j "$(nproc)"
+ninja -C /priv/config-ui/build -j "$JOBS"
 
 echo "=== 构建完成, 产物 ==="
 ls -l "$SO" /out/lib/libctranslate2.so.4* /out/librime/build/lib/librime.so.1.*

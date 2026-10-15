@@ -10,3 +10,14 @@ astyle.sh
 
 # config-ui 的本地构建目录（build/* 只锚定仓库根，这里要单独写）
 config-ui/build/
+
+# Local worktrees, build products and generated visual references.
+.claude/
+**/__pycache__/
+*.py[cod]
+.DS_Store
+._*
+panel-omarchy/references/
+*.pkg.tar.zst
+*.deb
+build-out/

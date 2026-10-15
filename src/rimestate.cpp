@@ -6,6 +6,8 @@
 
 #include "rimestate.h"
 #include "rimecandidate.h"
+#include "dbus_public.h"
+#include <fcitx-utils/dbus/bus.h>
 #include <fcitx-utils/utf8.h>
 #include <fcitx/candidatelist.h>
 #include <fcitx/inputcontext.h>
@@ -149,6 +151,7 @@ void RimeState::keyEvent(KeyEvent &event) {
     auto ic = event.inputContext();
     RIME_STRUCT(RimeCommit, commit);
     if (api->get_commit(session_, &commit)) {
+        compositionActive_ = false;
         ic->commitString(commit.text);
         api->free_commit(&commit);
     }
@@ -236,7 +239,12 @@ void RimeState::updatePreedit(InputContext *ic, const RimeContext &context) {
 
     if (engine_->config().showPreeditInApplication.value() &&
         ic->capabilityFlags().test(CapabilityFlag::Preedit)) {
-        clientPreedit = preedit;
+        if (!engine_->config().inlineCandidate.value() || !context.commit_text_preview) {
+            clientPreedit = preedit;
+        } else {
+            clientPreedit = Text(context.commit_text_preview, flag);
+            clientPreedit.setCursor(clientPreedit.textLength());
+        }
     } else {
         ic->inputPanel().setPreedit(preedit);
     }
@@ -272,6 +280,17 @@ void RimeState::updateUI(InputContext *ic, bool keyRelease,
             break;
         }
 
+        const bool active = context.composition.length > 0;
+        if (active && !compositionActive_) ++compositionSerial_;
+        compositionActive_ = active;
+        // Give the panel an explicit lifecycle; asynchronous AI refreshes keep
+        // the same origin, while a rapid commit/new input must get a new one.
+        if (auto *dbus = engine_->dbus()) {
+            auto message = dbus->call<IDBusModule::bus>()->createSignal(
+                "/rime", "org.bangke.Candidate1", "Composition");
+            message << (std::to_string(session_) + ":" + std::to_string(compositionSerial_)) << active;
+            message.send();
+        }
         updatePreedit(ic, context);
 
         if (context.menu.num_candidates) {

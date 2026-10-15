@@ -85,3 +85,39 @@ QString RimeDeploy::addonConfigDump(const QString& addon, const QStringList& key
   }
   return out.join(QStringLiteral("  "));
 }
+
+namespace {
+QDBusMessage panelCall(const QString& method, const QVariantList& args = {}) {
+  auto message = QDBusMessage::createMethodCall(
+      QStringLiteral("org.kde.impanel"), QStringLiteral("/org/kde/impanel"),
+      QStringLiteral("org.kde.impanel2"), method);
+  message.setArguments(args);
+  return QDBusConnection::sessionBus().call(message, QDBus::Block, 2000);
+}
+}
+
+bool RimeDeploy::usesCustomPanel() {
+  if (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel") return true;
+  const auto reply = panelCall(QStringLiteral("GetPanelIdentity"));
+  return reply.type() == QDBusMessage::ReplyMessage &&
+         reply.arguments().value(0).toString().startsWith(QStringLiteral("bangke-panel:"));
+}
+
+QString RimeDeploy::setCustomPanelLayout(const QString& orientation) {
+  const auto reply = panelCall(QStringLiteral("SetLayout"), {orientation});
+  if (reply.type() == QDBusMessage::ErrorMessage ||
+      reply.arguments().value(0).toString() != orientation) {
+    return QStringLiteral("配置已保存，但自绘面板未确认布局更新：%1。请检查 bangke-panel 服务。")
+        .arg(reply.errorMessage());
+  }
+  return QString();
+}
+
+QString RimeDeploy::setCustomPanelAppearance(const QString& appearance) {
+  const auto reply = panelCall(QStringLiteral("SetAppearance"), {appearance});
+  if (reply.type() == QDBusMessage::ErrorMessage)
+    return QStringLiteral("外观已保存，但应用到候选面板失败：%1。请安装新版候选面板后重试。").arg(reply.errorMessage());
+  if (reply.arguments().value(0).toString() != QStringLiteral("applied:1"))
+    return QStringLiteral("候选面板未确认外观设置已应用。");
+  return QString();
+}

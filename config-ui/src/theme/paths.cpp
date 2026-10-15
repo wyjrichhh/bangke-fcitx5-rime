@@ -14,6 +14,14 @@ QString standardLocation(QStandardPaths::StandardLocation location,
   return path.isEmpty() ? QDir::homePath() + fallback : path;
 }
 
+// Qt5 的 QStandardPaths 没有 state 位置（Qt6 才有 GenericStateLocation），
+// 按 XDG 规范自己拼：XDG_STATE_HOME，否则 ~/.local/state。
+QString stateHome() {
+  const QByteArray env = qgetenv("XDG_STATE_HOME");
+  if (!env.isEmpty()) return QString::fromLocal8Bit(env);
+  return QDir::homePath() + QStringLiteral("/.local/state");
+}
+
 }  // namespace
 
 QString dataHome() {
@@ -34,6 +42,19 @@ QString themeDir(const QString& name) {
 
 QString classicUiConf() {
   return configHome() + QStringLiteral("/fcitx5/conf/classicui.conf");
+}
+
+QString stateDir() {
+  return stateHome() + QStringLiteral("/bangke-pinyin");
+}
+
+QString omarchyThemeDir() {
+  const QByteArray override = qgetenv("BK_OMARCHY_THEME_DIR");
+  if (!override.isEmpty()) return QString::fromLocal8Bit(override);
+  const QString state = stateHome() + QStringLiteral("/omarchy/current/theme");
+  if (QFileInfo::exists(state + QStringLiteral("/colors.toml"))) return state;
+  const QString legacy = configHome() + QStringLiteral("/omarchy/current/theme");
+  return QFileInfo::exists(legacy + QStringLiteral("/colors.toml")) ? legacy : state;
 }
 
 QString rimeUserDir() { return dataHome() + QStringLiteral("/fcitx5/rime"); }

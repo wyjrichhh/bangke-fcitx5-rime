@@ -9,6 +9,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QIcon>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -31,20 +32,17 @@ const QStringList kPageTitles = {
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   data_ = YamlConfig::load();
-  // Linux（尤其 Wayland）下「拼音显示在候选面板里」走不通：那里的面板由**客户端**
-  // 渲染（fcitx5 文档：Wayland 下面板可能由客户端画、Qt 用原生 Qt API），它不认我们
-  // 主题里的图片/九宫格，有 preedit 时只画出一个灰块 + 大片空白。所以恒用 mac 的
-  // 出厂值（拼音在输入框内），设置页也不再暴露这一项。
   config_ = bangke::BangkeConfig::load(bangke::paths::sharedBangkeYaml(),
-                                       bangke::paths::customBangkeYaml());
+                                       bangke::paths::customBangkeYaml(),
+                                       bangke::appPlatformTheme());
   buildUi();
 }
 
 void MainWindow::buildUi() {
   setWindowTitle(YamlConfig::brandName() + QStringLiteral(" 设置"));
   // mac 的窗口是 740×680、最小 700×620；这里对齐，另外给侧栏与页脚留出空间。
-  setMinimumSize(700, 620);
-  resize(760, 680);
+  setMinimumSize(980, 700);
+  resize(1080, 800);
 
   auto* central = new QWidget(this);
   auto* root = new QVBoxLayout(central);
@@ -56,9 +54,34 @@ void MainWindow::buildUi() {
   bodyLayout->setContentsMargins(0, 0, 0, 0);
   bodyLayout->setSpacing(0);
 
-  sidebar_ = new bangke::Sidebar(body);
+  auto* navigation = new QWidget(body);
+  navigation->setObjectName(QStringLiteral("brandNavigation"));
+  navigation->setFixedWidth(248);
+  auto* nav = new QVBoxLayout(navigation);
+  nav->setContentsMargins(24, 32, 24, 24);
+  nav->setSpacing(12);
+  auto* mark = new QLabel(QStringLiteral("蚌"), navigation);
+  mark->setObjectName(QStringLiteral("brandMark"));
+  mark->setAlignment(Qt::AlignCenter);
+  mark->setFixedHeight(108);
+  auto* brand = new QLabel(YamlConfig::brandName(), navigation);
+  brand->setObjectName(QStringLiteral("brandTitle"));
+  brand->setAlignment(Qt::AlignCenter);
+  auto* caption = new QLabel(QStringLiteral("本地 AI · 自在输入"), navigation);
+  caption->setObjectName(QStringLiteral("brandCaption"));
+  caption->setAlignment(Qt::AlignCenter);
+  nav->addWidget(mark);
+  nav->addWidget(brand);
+  nav->addWidget(caption);
+  nav->addSpacing(30);
+  sidebar_ = new bangke::Sidebar(navigation);
   sidebar_->addItems(kPageTitles);
-  bodyLayout->addWidget(sidebar_);
+  nav->addWidget(sidebar_, 1);
+  auto* privacy = new QLabel(QStringLiteral("离线推理\n输入内容留在本机"), navigation);
+  privacy->setObjectName(QStringLiteral("brandCaption"));
+  privacy->setWordWrap(true);
+  nav->addWidget(privacy);
+  bodyLayout->addWidget(navigation);
 
   auto* divider = new QFrame(body);
   divider->setFrameShape(QFrame::VLine);
@@ -88,9 +111,11 @@ void MainWindow::buildUi() {
 
   auto* footer = new QWidget(central);
   auto* footerLayout = new QHBoxLayout(footer);
-  footerLayout->setContentsMargins(16, 10, 16, 10);
+  footer->setObjectName(QStringLiteral("settingsFooter"));
+  footerLayout->setContentsMargins(24, 16, 24, 16);
   footerLayout->setSpacing(8);
   status_ = new QLabel(footer);
+  status_->setWordWrap(true);
   QPalette statusPalette = status_->palette();
   statusPalette.setColor(QPalette::WindowText,
                          bangke::palette::secondaryText(status_));
@@ -124,28 +149,27 @@ void MainWindow::setPage(int index) {
 }
 
 void MainWindow::restoreDefaults() {
-  // 出厂值单取（不带用户补丁），据此把补丁里的受管键全删掉。
+  // 「出厂值」取的是**叠了桌面缺省**的那一份（load 传了 platform、补丁传空），
+  // 与设置页里控件的默认显示值是同一个东西 —— 否则「恢复默认」会恢复成一个
+  // 用户从没见过的值，而且和「保存时什么算没改过」对不上。
   const bangke::StyleOptions factory = bangke::BangkeConfig::load(
                                            bangke::paths::sharedBangkeYaml(),
-                                           QString())
+                                           QString(),
+                                           bangke::appPlatformTheme())
                                            .style();
   bangke::resetStylePatch(factory);
   appearance_->setStyle(factory);
   status_->setText(QStringLiteral("外观设置已恢复出厂值，点「保存并应用」生效。"));
 }
 
-// 保存过程的逐步日志。
-//
-// 为什么要有它：候选面板在真机上「一保存就消失」，而症状完全由 classicui.conf 里
-// 某个键的最终取值决定。光看结果猜是哪一步写坏的已经猜错好几轮了 —— 让它自己把
-// 中间值打出来，比外面猜准得多。写到共享目录（Mac 侧能直接读到），没有就写家目录。
+// Save diagnostics belong in the user's cache, independent of test shares.
 namespace {
-const char* kSaveLogName = "save-log.txt";
-
 QString saveLogPath() {
-  const QString share = QDir::homePath() + QStringLiteral("/bangke-share");
-  if (QFileInfo::exists(share)) return share + QLatin1Char('/') + kSaveLogName;
-  return QDir::homePath() + QLatin1Char('/') + kSaveLogName;
+  QString cache = QString::fromLocal8Bit(qgetenv("XDG_CACHE_HOME"));
+  if (cache.isEmpty()) cache = QDir::homePath() + QStringLiteral("/.cache");
+  const QString dir = cache + QStringLiteral("/bangke-pinyin");
+  QDir().mkpath(dir);
+  return dir + QStringLiteral("/settings.log");
 }
 
 void saveLog(const QString& line) {
@@ -177,11 +201,23 @@ QString readClassicUiKeys(const QString& conf) {
 
 void MainWindow::saveAndDeploy() {
   data_.style = appearance_->style();
-  data_.preeditInApp = true;  // 见构造函数里的说明：这一项在 Linux 上固定
+  data_.preeditInApp = RimeDeploy::usesCustomPanel() ? data_.style.inlinePreedit : true;
   behavior_->collect(&data_);
   ai_->collect(&data_);
   schemas_->collect(&data_);
 
+  if (RimeDeploy::usesCustomPanel() && !data_.style.candidateFormat.contains(QStringLiteral("[candidate]"))) {
+    QMessageBox::warning(this,QStringLiteral("候选格式无效"),QStringLiteral("候选格式需要包含 [candidate]，否则无法显示候选文字。"));return;
+  }
+  bool hasSchema = false;
+  for (const auto& schema : data_.schemas) hasSchema |= schema.enabled;
+  if (!hasSchema) {
+    QMessageBox::warning(this,QStringLiteral("无法保存"),QStringLiteral("请至少启用一个输入方案。"));return;
+  }
+  if (data_.ai.enabled && !data_.ai.modelPath.isEmpty() &&
+      (!QFileInfo::exists(data_.ai.modelPath+"/model.bin") || !QFileInfo::exists(data_.ai.modelPath+"/config.json") || !QFileInfo::exists(data_.ai.modelPath+"/tokenizer.json") || !QFileInfo::exists(data_.ai.modelPath+"/shared_vocabulary.json"))) {
+    QMessageBox::warning(this,QStringLiteral("模型目录无效"),QStringLiteral("请选择包含 model.bin、config.json、tokenizer.json 和 shared_vocabulary.json 的完整模型目录。"));return;
+  }
   saveLog(QStringLiteral("========== 保存开始 =========="));
   saveLog(QStringLiteral("style: fontFace=[%1] fontPoint=%2 colorScheme=[%3] dark=[%4] "
                          "orientation=[%5] corner=%6 shadow=%7 border=%8 alpha=%9")
@@ -207,6 +243,34 @@ void MainWindow::saveAndDeploy() {
   }
   saveLog(QStringLiteral("YamlConfig::save 成功"));
 
+  if (RimeDeploy::usesCustomPanel()) {
+    saveLog(QStringLiteral("面板后端: bangke-panel；跳过 classicui 写入、推送和 fcitx5 重启"));
+    QStringList errors;
+    ensureRimeInputMethod();
+    const QString rimeError = RimeDeploy::setAddonConfig(
+        QStringLiteral("rime-ai"),
+        {{QStringLiteral("PreeditInApplication"), data_.preeditInApp},
+         {QStringLiteral("InlineCandidate"), data_.style.inlineCandidate}});
+    if (!rimeError.isEmpty()) errors << rimeError;
+    const auto currentConfig = bangke::BangkeConfig::load(bangke::paths::sharedBangkeYaml(), bangke::paths::customBangkeYaml(), bangke::appPlatformTheme());
+    const QString panelError = RimeDeploy::setCustomPanelAppearance(bangke::customPanelAppearance(currentConfig, data_.style));
+    saveLog(QStringLiteral("SetAppearance(%1) 返回: [%2]")
+                .arg(data_.style.textOrientation, panelError));
+    if (!panelError.isEmpty()) errors << panelError;
+    const QString deployError = RimeDeploy::triggerDeploy();
+    saveLog(QStringLiteral("triggerDeploy 返回: [%1]").arg(deployError));
+    if (!deployError.isEmpty()) errors << deployError;
+    saveLog(QStringLiteral("========== 保存结束（自绘面板，无重启）=========="));
+    if (errors.isEmpty()) {
+      status_->setText(QStringLiteral("已保存并应用。"));
+      close();
+    } else {
+      status_->setText(errors.join(QLatin1Char('\n')));
+      QMessageBox::information(this, QStringLiteral("已保存"), status_->text());
+    }
+    return;
+  }
+
   const bangke::ThemeResult theme = bangke::applyTheme(config_, data_.style);
   saveLog(QStringLiteral("applyTheme ok=%1 msg=[%2]")
               .arg(theme.ok ? QStringLiteral("true") : QStringLiteral("false"),
@@ -226,7 +290,8 @@ void MainWindow::saveAndDeploy() {
   QStringList pushErrors;
   const QString rimeError = RimeDeploy::setAddonConfig(
       QStringLiteral("rime-ai"),
-      {{QStringLiteral("PreeditInApplication"), data_.preeditInApp}});
+      {{QStringLiteral("PreeditInApplication"), data_.preeditInApp},
+         {QStringLiteral("InlineCandidate"), data_.style.inlineCandidate}});
   if (!rimeError.isEmpty()) pushErrors << rimeError;
   // 不启用「跟随系统深色」（UseDarkTheme=False，DarkTheme 指回同一个主题）。
   //

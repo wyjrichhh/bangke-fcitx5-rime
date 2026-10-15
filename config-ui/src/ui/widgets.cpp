@@ -27,6 +27,7 @@ QLabel* makeLabel(const QString& text, bool secondary = false,
   QFont font = label->font();
   font.setPointSizeF(font.pointSizeF());
   label->setFont(font);
+  label->setProperty("secondary", secondary);
   if (secondary) {
     QPalette pal = label->palette();
     pal.setColor(QPalette::WindowText, palette::secondaryText(label));
@@ -104,25 +105,35 @@ HintIcon::HintIcon(const QString& hint, QWidget* parent) : QLabel(parent) {
 RowShell::RowShell(const QString& label, const QString& hint, QWidget* control,
                    QWidget* parent)
     : QWidget(parent) {
+  setMinimumHeight(64);
   auto* layout = new QHBoxLayout(this);
-  layout->setContentsMargins(0, kRowSpacing, 0, kRowSpacing);
-  layout->setSpacing(6);
+  layout->setContentsMargins(18, 12, 18, 12);
+  layout->setSpacing(24);
+  auto* labels = new QVBoxLayout;
+  labels->setSpacing(5);
   auto* labelWidget = makeLabel(label, false, this);
   labelWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-  layout->addWidget(labelWidget);
+  labels->addWidget(labelWidget);
   if (!hint.isEmpty()) {
-    auto* hintIcon = new HintIcon(hint, this);
-    // 问号要自己收鼠标（要弹 tooltip），所以不透明
-    layout->addWidget(hintIcon);
+    auto* description = makeLabel(hint, true, this);
+    description->setWordWrap(true);
+    description->setAttribute(Qt::WA_TransparentForMouseEvents);
+    QFont small = description->font();
+    small.setPointSizeF(qMax(9.0, small.pointSizeF() - 1));
+    description->setFont(small);
+    labels->addWidget(description);
   }
-  layout->addStretch(1);
+  layout->addLayout(labels, 1);
   if (control) layout->addWidget(control);
+
 }
 
 void RowShell::paintEvent(QPaintEvent*) {
   QPainter painter(this);
-  painter.setPen(QPen(palette::separator(this), 1));
-  painter.drawLine(0, height() - 1, width(), height() - 1);
+  QColor line = palette::text(this);
+  line.setAlpha(32);
+  painter.setPen(QPen(line, 1));
+  painter.drawLine(18, height() - 1, width() - 18, height() - 1);
 }
 
 SliderRow::SliderRow(const QString& label, const QString& hint, double minimum,
@@ -141,7 +152,7 @@ SliderRow::SliderRow(const QString& label, const QString& hint, double minimum,
   slider_->setSingleStep(1);
   slider_->setPageStep(1);
   slider_->setRange(0, qMax(1, int(qRound((maximum - minimum) / step_))));
-  slider_->setFixedWidth(220);
+  slider_->setFixedWidth(164);
   layout->addWidget(slider_);
 
   value_ = makeLabel(QString(), true, container);
@@ -254,19 +265,21 @@ PageScaffold::PageScaffold(const QString& title, const QString& subtitle,
 
   auto* header = new QWidget(this);
   auto* headerLayout = new QVBoxLayout(header);
-  headerLayout->setContentsMargins(20, 20, 20, 6);
-  headerLayout->setSpacing(2);
+  headerLayout->setContentsMargins(32, 28, 32, 18);
+  headerLayout->setSpacing(8);
   auto* titleLabel = makeLabel(title, false, header);
   QFont titleFont = titleLabel->font();
   titleFont.setPointSizeF(titleFont.pointSizeF() + 5);
   titleFont.setBold(true);
   titleLabel->setFont(titleFont);
+  titleLabel->setObjectName(QStringLiteral("pageTitle"));
   headerLayout->addWidget(titleLabel);
   if (!subtitle.isEmpty()) {
     auto* subtitleLabel = makeLabel(subtitle, true, header);
     QFont subtitleFont = subtitleLabel->font();
     subtitleFont.setPointSizeF(subtitleFont.pointSizeF() - 1);
     subtitleLabel->setFont(subtitleFont);
+    subtitleLabel->setWordWrap(true);
     headerLayout->addWidget(subtitleLabel);
   }
   outer->addWidget(header);
@@ -276,28 +289,46 @@ PageScaffold::PageScaffold(const QString& title, const QString& subtitle,
   scroll->setFrameShape(QFrame::NoFrame);
   content_ = new QWidget(scroll);
   layout_ = new QVBoxLayout(content_);
-  layout_->setContentsMargins(20, 4, 20, 20);
+  layout_->setContentsMargins(32, 6, 32, 28);
   layout_->setSpacing(0);
   layout_->addStretch(1);
   scroll->setWidget(content_);
   outer->addWidget(scroll, 1);
 }
 
+void PageScaffold::addFixedWidget(QWidget* widget) {
+  auto* container = new QWidget(this);
+  auto* fixed = new QVBoxLayout(container);
+  fixed->setContentsMargins(32, 0, 32, 14);
+  fixed->addWidget(widget);
+  static_cast<QVBoxLayout*>(layout())->insertWidget(1, container);
+}
+
 void PageScaffold::addSection(const QString& title) {
-  if (layout_->count() > 1) addSpacing(18);
-  auto* label = makeLabel(title, true, content_);
+  auto* group = new QFrame(content_);
+  group->setObjectName(QStringLiteral("settingsGroup"));
+  sectionLayout_ = new QVBoxLayout(group);
+  sectionLayout_->setContentsMargins(0, 0, 0, 8);
+  sectionLayout_->setSpacing(0);
+  auto* label = makeLabel(title, false, group);
+  label->setObjectName(QStringLiteral("sectionHeading"));
+  label->setContentsMargins(18, 14, 18, 12);
   QFont font = label->font();
   font.setBold(true);
   label->setFont(font);
-  layout_->insertWidget(layout_->count() - 1, label);
+  sectionLayout_->addWidget(label);
+  layout_->insertSpacing(layout_->count() - 1, 18);
+  layout_->insertWidget(layout_->count() - 1, group);
 }
 
 void PageScaffold::addRow(QWidget* row) {
-  layout_->insertWidget(layout_->count() - 1, row);
+  if (sectionLayout_) sectionLayout_->addWidget(row);
+  else layout_->insertWidget(layout_->count() - 1, row);
 }
 
 void PageScaffold::addWidget(QWidget* widget) {
-  layout_->insertWidget(layout_->count() - 1, widget);
+  if (sectionLayout_) sectionLayout_->addWidget(widget);
+  else layout_->insertWidget(layout_->count() - 1, widget);
 }
 
 void PageScaffold::addSpacing(int height) {
@@ -306,16 +337,16 @@ void PageScaffold::addSpacing(int height) {
 
 Sidebar::Sidebar(QWidget* parent) : QListWidget(parent) {
   setObjectName(QStringLiteral("sidebar"));
-  setFixedWidth(200);
+  setMinimumWidth(200);
+  setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   setFrameShape(QFrame::NoFrame);
   setSelectionMode(QAbstractItemView::SingleSelection);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   setSpacing(0);
   // 底色在这里给死：控件级样式表优先级高于应用级 QSS，靠应用级规则会被盖掉。
-  setStyleSheet(QStringLiteral("QListWidget { background: %1; outline: none; }"
+  setStyleSheet(QStringLiteral("QListWidget { background: transparent; border: none; outline: none; }"
                                "QListWidget::item { border: none; }"
-                               "QListWidget::item:selected { background: transparent; }")
-                    .arg(palette::sidebar(this).name()));
+                               "QListWidget::item:selected { background: transparent; }"));
 
   // 选中态是自绘的圆角条，QSS 画不出来。
   class Delegate : public QStyledItemDelegate {
@@ -325,11 +356,13 @@ Sidebar::Sidebar(QWidget* parent) : QListWidget(parent) {
                const QModelIndex& index) const override {
       painter->save();
       painter->setRenderHint(QPainter::Antialiasing, true);
-      const QRectF row = QRectF(option.rect).adjusted(8, 2, -8, -2);
+      const QRectF row = QRectF(option.rect).adjusted(0, 3, 0, -3);
       if (option.state & QStyle::State_Selected) {
         painter->setPen(Qt::NoPen);
         painter->setBrush(palette::sidebarSelection(option.widget));
         painter->drawRoundedRect(row, 6, 6);
+        painter->setBrush(palette::accent(option.widget));
+        painter->drawRoundedRect(QRectF(row.left(), row.top() + 10, 3, row.height() - 20), 1.5, 1.5);
       }
       QColor textColor = palette::text(option.widget);
       if (!(option.state & QStyle::State_Selected))
@@ -338,7 +371,7 @@ Sidebar::Sidebar(QWidget* parent) : QListWidget(parent) {
       QFont font = option.font;
       if (option.state & QStyle::State_Selected) font.setBold(true);
       painter->setFont(font);
-      painter->drawText(row.adjusted(8, 0, -8, 0),
+      painter->drawText(row.adjusted(18, 0, -12, 0),
                         Qt::AlignLeft | Qt::AlignVCenter,
                         index.data(Qt::DisplayRole).toString());
       painter->restore();
@@ -346,7 +379,7 @@ Sidebar::Sidebar(QWidget* parent) : QListWidget(parent) {
     QSize sizeHint(const QStyleOptionViewItem& option,
                    const QModelIndex& index) const override {
       Q_UNUSED(index);
-      return QSize(option.rect.width(), 30);
+      return QSize(option.rect.width(), 48);
     }
   };
   setItemDelegate(new Delegate(this));

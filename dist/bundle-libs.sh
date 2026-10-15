@@ -9,7 +9,7 @@
 # 产物落 /out/bundle-libs（构建产物，与 vendor 的第三方物料分开）。
 set -e
 apt-get update -qq >/dev/null 2>&1
-apt-get install -y -qq libboost-regex1.74-dev libboost-filesystem1.74-dev libboost-system1.74-dev libboost-locale1.74-dev libyaml-cpp-dev libgoogle-glog-dev libleveldb-dev libmarisa-dev libopencc-dev libgflags-dev libsnappy-dev >/dev/null 2>&1
+apt-get install -y -qq libboost-regex-dev libboost-filesystem-dev libboost-system-dev libboost-locale-dev libyaml-cpp-dev libgoogle-glog-dev libleveldb-dev libmarisa-dev libopencc-dev libgflags-dev libsnappy-dev >/dev/null 2>&1
 
 SEEN=/tmp/seen.txt
 rm -f "$SEEN"
