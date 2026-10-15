@@ -2,6 +2,9 @@
 
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
+#include <QJsonDocument>
+#include <QJsonArray>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -45,18 +48,15 @@ int leadingSpaces(const QString& line) {
 
 // 取 "key: value" 的 value，剥掉行内注释与引号。
 QString scalarValue(const QString& line) {
-  int colon = line.indexOf(':');
-  if (colon < 0) return QString();
-  QString v = line.mid(colon + 1);
-  int hash = v.indexOf('#');
-  if (hash >= 0) v = v.left(hash);
-  v = v.trimmed();
-  if (v.size() >= 2 &&
-      ((v.front() == '\'' && v.back() == '\'') ||
-       (v.front() == '"' && v.back() == '"'))) {
-    v = v.mid(1, v.size() - 2);
+  const int colon=line.indexOf(':');if(colon<0) return QString();
+  QString v=line.mid(colon+1).trimmed();
+  if(v.startsWith(QLatin1Char('"'))) {
+    const auto document=QJsonDocument::fromJson(("["+v+"]").toUtf8());
+    if(document.isArray()) return document.array().at(0).toString();
   }
-  return v;
+  if(v.startsWith(QLatin1Char('\'')) && v.endsWith(QLatin1Char('\''))) return v.mid(1,v.size()-2).replace("''","'");
+  const int hash=v.indexOf('#');if(hash>=0) v=v.left(hash);
+  return v.trimmed();
 }
 
 QString readScalar(const QStringList& lines, const QString& key) {
@@ -103,12 +103,13 @@ QStringList readLines(const QString& path) {
 }
 
 bool writeLines(const QString& path, const QStringList& lines) {
-  QFile f(path);
+  QSaveFile f(path);
   if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
     return false;
   QTextStream out(&f);
   for (const QString& l : lines) out << l << "\n";
-  return true;
+  out.flush();
+  return out.status() == QTextStream::Ok && f.commit();
 }
 
 // 在 patch: 之后插一行（无 patch 块则补一个）。
@@ -307,7 +308,7 @@ QString YamlConfig::rimeUserDir() {
 
 QString YamlConfig::brandName() {
   // 打包脚本会 sed 这个文件的 Name=（见 repack 脚本的 IM_NAME）。
-  QFile f("/usr/share/fcitx5/inputmethod/rime.conf");
+  QFile f("/usr/share/fcitx5/inputmethod/rime-ai.conf");
   if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
     QTextStream in(&f);
     while (!in.atEnd()) {
@@ -324,7 +325,7 @@ QString rimeAddonConfPath() {
   QString cfgHome =
       QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
   if (cfgHome.isEmpty()) cfgHome = QDir::homePath() + "/.config";
-  return cfgHome + "/fcitx5/conf/rime.conf";
+  return cfgHome + "/fcitx5/conf/rime-ai.conf";
 }
 
 bool readIniBool(const QString& path, const QString& key, bool fallback) {
@@ -335,7 +336,8 @@ bool readIniBool(const QString& path, const QString& key, bool fallback) {
 
 bangke::StyleOptions readStyle() {
   return bangke::BangkeConfig::load(bangke::paths::sharedBangkeYaml(),
-                                   bangke::paths::customBangkeYaml())
+                                   bangke::paths::customBangkeYaml(),
+                                   bangke::appPlatformTheme())
       .style();
 }
 }  // namespace
@@ -359,8 +361,10 @@ RimeData YamlConfig::load() {
 
   data.preeditInApp = readIniBool(rimeAddonConfPath(), "PreeditInApplication", true);
   const QStringList iceCustom = readLines(dir + "/rime_ice.custom.yaml");
+  // 只有显式写了 "1" 才算开。旧写法是 `!= "0"`，那么「文件里没这个键」会被当成
+  // 开 —— 而雾凇 schema 原生 spelling_hints: 8，于是默认就带拼音注释。
   data.spellingHints =
-      readScalar(iceCustom, "translator/spelling_hints") != "0";
+      readScalar(iceCustom, "translator/spelling_hints") == "1";
 
   // 展示两个内置方案 + schema_list 里已有的（用户自装方案加入列表后即可管理）。
   QStringList names = kKnownSchemas;
@@ -402,13 +406,12 @@ RimeData YamlConfig::load() {
   ai.minHanzi = toInt("min_hanzi", ai.minHanzi);
   ai.targetIndex = toInt("target_index", ai.targetIndex);
   ai.searchRange = toInt("search_range", ai.searchRange);
-  bool b = false;
-  double q = get("quality").toDouble(&b);
-  if (b) ai.quality = q;
   QString dev = get("device");
   if (!dev.isEmpty()) ai.device = dev;
   QString en = get("enabled");
   if (en == "false" || en == "0") ai.enabled = false;
+  QString fp = get("filter_punctuation");
+  if (fp == "false" || fp == "0") ai.filterPunctuation = false;
 
   return data;
 }
@@ -426,10 +429,15 @@ bool YamlConfig::save(const RimeData& data) {
                      data.preeditInApp ? QStringLiteral("True")
                                        : QStringLiteral("False")))
     return false;
-  bangke::writeStylePatch(
+  if (!bangke::ini::setValue(rimeAddonConfPath(), QStringLiteral("InlineCandidate"),data.style.inlineCandidate ? QStringLiteral("True") : QStringLiteral("False"))) return false;
+  // 基准要带上桌面主题给的缺省（见 baselineStyle 的注释）：拿**原始出厂值**当基准
+  // 会把被桌面缺省过的键判成「用户改过」，一保存就把 Omarchy 的值冻进补丁，
+  // 跟随系统主题从此失效。
+  if (!bangke::writeStylePatch(
       data.style,
-      bangke::BangkeConfig::load(bangke::paths::sharedBangkeYaml(), QString())
-          .style());
+      bangke::BangkeConfig::load(bangke::paths::sharedBangkeYaml(), QString(),
+                                 bangke::appPlatformTheme())
+          .style())) return false;
   // 保持 schema_list 原有顺序，追加新勾选的；未勾选的移除。
   QStringList enabled;
   for (const QString& a : readSchemaList(def)) {
@@ -453,7 +461,13 @@ bool YamlConfig::save(const RimeData& data) {
 
     if (kKnownSchemas.contains(s.name)) {
       const AISettings& ai = data.ai;
+      if (!ai.modelPath.isEmpty()) {
+        const QByteArray json = QJsonDocument(QJsonArray{ai.modelPath}).toJson(QJsonDocument::Compact);
+        setScalarInBlock(sc,"ai_predict","model_path",QString::fromUtf8(json.mid(1,json.size()-2)));
+      }
       setScalarInBlock(sc, "ai_predict", "enabled", ai.enabled ? "true" : "false");
+      setScalarInBlock(sc, "ai_predict", "filter_punctuation",
+                       ai.filterPunctuation ? "true" : "false");
       setScalarInBlock(sc, "ai_predict", "device", ai.device);
       setScalarInBlock(sc, "ai_predict", "max_tokens", QString::number(ai.maxTokens));
       setScalarInBlock(sc, "ai_predict", "debounce_ms", QString::number(ai.debounceMs));
@@ -463,7 +477,6 @@ bool YamlConfig::save(const RimeData& data) {
       setScalarInBlock(sc, "ai_predict", "context_window_size",
                        QString::number(ai.contextWindowSize));
       setScalarInBlock(sc, "ai_predict", "min_hanzi", QString::number(ai.minHanzi));
-      setScalarInBlock(sc, "ai_predict", "quality", QString::number(ai.quality));
       setScalarInBlock(sc, "ai_predict", "target_index", QString::number(ai.targetIndex));
       setScalarInBlock(sc, "ai_predict", "search_range", QString::number(ai.searchRange));
       // 自学习（用户词典/自动调频）按方案独立。
@@ -479,7 +492,7 @@ bool YamlConfig::save(const RimeData& data) {
     const int simp = simplifiedStateIndex(sw.states);
     if (sw.index >= 0 && simp >= 0) {
       // 先清掉本 UI 历史版本写过的字形 reset（序号可能已漂移），再写当前值。
-      QRegularExpression staleRe("^\\s*switches/@\\d+/reset\\s*:");
+      QRegularExpression staleRe(QString("^\\s*switches/@%1/reset\\s*:").arg(sw.index));
       QRegularExpression legacyRe("^\\s*switches/traditionalization/reset\\s*:");
       for (int i = sc.size() - 1; i >= 0; --i)
         if (staleRe.match(sc[i]).hasMatch() || legacyRe.match(sc[i]).hasMatch())

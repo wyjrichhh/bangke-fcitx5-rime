@@ -14,7 +14,7 @@ namespace bangke {
 // factory 必须是**解析后的出厂设置**（BangkeConfig::load(出厂文件, 空) 的 style()）：
 // 有些键在 bangke.yaml 里没有、由代码默认值兜底（例如 alpha），
 // 拿文件里的原始字符串当基准会把它们误判成「用户改过」而写进补丁。
-void writeStylePatch(const StyleOptions& style, const StyleOptions& factory);
+bool writeStylePatch(const StyleOptions& style, const StyleOptions& factory);
 
 // 删掉所有受管键，「恢复默认」用。
 void resetStylePatch(const StyleOptions& factory);

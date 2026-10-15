@@ -22,7 +22,19 @@ struct ThemeResult {
 
 // 解析字体：字族没装时预览回落到系统默认（classicui.conf 里仍写配置的字族，
 // 由 pango 自己回落）。
+QString customPanelAppearance(const BangkeConfig& config, const StyleOptions& style);
+
 QFont resolveFont(const StyleOptions& style, QString* installedFamily = nullptr);
+
+// classicui.conf 的 `Font=` 该写什么。**不要自己拼字符串** —— 两个写入点
+// （本文件的 applyTheme 与 mainwindow 的 SetConfig 推送）都走这个函数。
+//
+// 为什么必须校验：`Font=` 一旦是空的（或家族名没装），fcitx5 会解析出 0 号字，
+// 候选面板高度跟着文字高度走 → 归零 → 面板整个看不见。真机上「一保存候选面板
+// 就消失」就是这个 —— 而家族名来自设置页的字体按钮，可能是空串。
+// 家族名空或未安装时退到 "Noto Sans CJK SC"；连它也没装就返回空串，
+// 调用方应当**整项不写**，让 fcitx5 用它自己的默认字体。
+QString classicUiFontSpec(const StyleOptions& style);
 
 // 某个外观下的面板规格。预览与落盘共用：
 //   dark=false 用 color_scheme，dark=true 用 color_scheme_dark（空则跟随浅色方案）。
@@ -42,6 +54,14 @@ ThemeResult applyTheme(const BangkeConfig& config, const StyleOptions& style,
 // 用户目录缺 bangke.yaml 时从发行包里的 seed 拷一份（postinst 没覆盖到的用户）。
 // 返回错误信息，空 = 成功或无需处理。
 QString ensureSharedConfig();
+
+// 只重写 classicui.conf 里那几个键（Theme / DarkTheme / UseDarkTheme / Font /
+// Vertical Candidate List），不动主题目录。
+//
+// 为什么要单独一个入口：真机上 fcitx5 在 SetConfig 之后会把这几个键重置成默认、
+// 并把 Font 写成空的（见 save-log.txt 的时序）。所以写入必须放在**推送之后** ——
+// 否则刚写好的值会被推送冲掉。
+void writeClassicUiConf(const StyleOptions& style);
 
 }  // namespace bangke
 

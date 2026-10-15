@@ -28,6 +28,9 @@ class FontButton : public RowShell {
 
  private:
   QPushButton* button_ = nullptr;
+  // 按钮文字被清空时的兜底家族名。空家族名会让 fcitx5 解析出 0 号字、
+  // 候选面板高度归零整个看不见（真机上「保存后候选面板消失」的直接原因）。
+  QString fallback_;
 };
 
 class TextRow;
@@ -36,9 +39,7 @@ class TextRow;
 QString fcitxVersionString();
 bool fcitxSupportsDarkTheme();
 
-// 外观页：只放 classicui 真能生效的项。classicui 表达不出来的（单行排列、
-// 高亮圆角、叠加透明、候选格式模板、毛玻璃、记忆面板宽度）**不放**，
-// 免得出现「滑杆拉了半天面板不动」的死控件。
+// 外观页根据面板后端展示实际支持的选项。
 class AppearancePage : public PageScaffold {
   Q_OBJECT
  public:
@@ -62,10 +63,22 @@ class AppearancePage : public PageScaffold {
   SliderRow* transparency_ = nullptr;
   FontButton* font_ = nullptr;
   SliderRow* fontSize_ = nullptr;
+  ComboRow* candidateLayout_ = nullptr;
   ComboRow* orientation_ = nullptr;
   SliderRow* corner_ = nullptr;
   SliderRow* shadow_ = nullptr;
   SliderRow* border_ = nullptr;
+  SliderRow* borderHeight_ = nullptr;
+  SliderRow* highlightCorner_ = nullptr;
+  SliderRow* lineSpacing_ = nullptr;
+  SliderRow* spacing_ = nullptr;
+  ToggleRow* inlinePreedit_ = nullptr;
+  ToggleRow* inlineCandidate_ = nullptr;
+  ToggleRow* memorizeSize_ = nullptr;
+  ToggleRow* translucency_ = nullptr;
+  ToggleRow* mutualExclusive_ = nullptr;
+  TextRow* candidateFormat_ = nullptr;
+  bool customPanel_ = false;
   ToggleRow* showPaging_ = nullptr;
 };
 
@@ -91,17 +104,20 @@ class AiPage : public PageScaffold {
 
  private:
   ToggleRow* enabled_ = nullptr;
+  ToggleRow* filterPunctuation_ = nullptr;
   ComboRow* device_ = nullptr;
   SliderRow* targetIndex_ = nullptr;
   SliderRow* maxTokens_ = nullptr;
   SliderRow* debounce_ = nullptr;
   SliderRow* minInput_ = nullptr;
   SliderRow* minHanzi_ = nullptr;
-  SliderRow* quality_ = nullptr;
   SliderRow* searchRange_ = nullptr;
   SliderRow* contextWindow_ = nullptr;
   SliderRow* minContextPrompt_ = nullptr;
+  QLabel* modelPathLabel_ = nullptr;
   QString modelPath_;
+  void updateModelPathLabel();
+  void pickModelDir();
 };
 
 // 方案与词典页（mac 上没有这一页 —— mac 把它放在菜单栏里；Linux 需要有入口）。

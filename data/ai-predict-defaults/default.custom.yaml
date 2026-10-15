@@ -1,0 +1,9 @@
+patch:
+  # 第一项 = 出厂默认方案：rime 没有 user.yaml 记忆时取 schema_list 的第一项
+  # （bangke-librime 的 Switcher::CreateSchema）。雾凇是我们的旗舰词库（AI 模型、拼音
+  # 注释都照它调），所以它排第一；明月放后面。
+  schema_list:
+    - schema: rime_ice
+    - schema: luna_pinyin
+  menu/page_size: 5
+  'modules/@next': ai_predict

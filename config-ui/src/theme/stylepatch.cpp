@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
 #include <QFileInfo>
 #include <QStringList>
 #include <QTextStream>
@@ -24,7 +25,7 @@ QStringList readLines(const QString& path) {
 
 bool writeLines(const QString& path, const QStringList& lines) {
   QDir().mkpath(QFileInfo(path).absolutePath());
-  QFile file(path);
+  QSaveFile file(path);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
     return false;
   QTextStream stream(&file);
@@ -33,7 +34,8 @@ bool writeLines(const QString& path, const QStringList& lines) {
     stream << lines.at(i);
     if (i + 1 < lines.size()) stream << '\n';
   }
-  return true;
+  stream.flush();
+  return stream.status() == QTextStream::Ok && file.commit();
 }
 
 int indentOf(const QString& line) {
@@ -124,7 +126,7 @@ void setPatchKey(QStringList& lines, const QString& keyPath,
 
 }  // namespace
 
-void writeStylePatch(const StyleOptions& style, const StyleOptions& factory) {
+bool writeStylePatch(const StyleOptions& style, const StyleOptions& factory) {
   const QString path = paths::customBangkeYaml();
   QStringList lines = readLines(path);
   if (lines.isEmpty()) lines << QStringLiteral("patch:");
@@ -136,9 +138,12 @@ void writeStylePatch(const StyleOptions& style, const StyleOptions& factory) {
     if (entries.at(i).second == factoryEntries.at(i).second)
       removePatchKey(lines, keyPath);
     else
-      setPatchKey(lines, keyPath, entries.at(i).second);
+      setPatchKey(lines, keyPath, entries.at(i).first == QLatin1String("candidate_format")
+        ? QStringLiteral("\"") + QString(entries.at(i).second).replace("\\", "\\\\").replace("\"", "\\\"") + QStringLiteral("\"") : entries.at(i).second);
   }
-  writeLines(path, lines);
+  if (style.textOrientation == QLatin1String("vertical"))
+    setPatchKey(lines,QStringLiteral("style/candidate_list_layout"),style.candidateListLayout);
+  return writeLines(path, lines);
 }
 
 void resetStylePatch(const StyleOptions& factory) {

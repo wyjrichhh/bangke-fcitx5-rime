@@ -6,7 +6,11 @@ namespace bangke::ninegrid {
 namespace {
 
 // 图上中央留的纯色区（会被拉伸）。≥2 是为了避免边缘像素参与插值。
-constexpr int kCenter = 2;
+// 九宫格的「中心切片」宽度。原来只有 2px —— 在 X11 上勉强能画，但在 Wayland
+// （面板是 layer surface，缓冲区要经过合成器缩放）上会导致面板整个画不出来：
+// 实测 Hyprland 下带 Image 的主题面板消失、去掉 Image 改纯色就正常。
+// 16px 让中心切片有足够余量，圆角尺寸不受影响（圆角只由 margin 决定）。
+constexpr int kCenter = 16;
 
 // 阴影的同心环层数上限（层数越多越平滑，但生成越慢）。
 constexpr int kMaxShadowRings = 24;

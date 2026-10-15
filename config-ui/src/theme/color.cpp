@@ -21,6 +21,18 @@ QColor parseRimeColor(const QString& spec) {
   return QColor(s);
 }
 
+QColor parseFcitxColor(const QString& spec) {
+  const QString s = spec.trimmed();
+  if (s.startsWith(QLatin1Char('#')) && s.size() == 9) {
+    bool ok = false;
+    const uint value = s.mid(1).toUInt(&ok, 16);
+    if (!ok) return QColor();
+    return QColor((value >> 24) & 255, (value >> 16) & 255,
+                  (value >> 8) & 255, value & 255);
+  }
+  return QColor(s);
+}
+
 QColor blendMac(const QColor& fg, const QColor& bg) {
   auto mix = [](int f, int b) { return (f * 2 + b) / 3; };
   return QColor(mix(fg.red(), bg.red()), mix(fg.green(), bg.green()),

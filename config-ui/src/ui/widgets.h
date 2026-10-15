@@ -134,11 +134,13 @@ class PageScaffold : public QWidget {
   void addSection(const QString& title);
   void addRow(QWidget* row);
   void addWidget(QWidget* widget);
+  void addFixedWidget(QWidget* widget);
   void addSpacing(int height);
 
  private:
   QVBoxLayout* layout_ = nullptr;
   QWidget* content_ = nullptr;
+  QVBoxLayout* sectionLayout_ = nullptr;
 };
 
 // 左侧导航（200px，选中态是 accent 22% 的圆角条）。

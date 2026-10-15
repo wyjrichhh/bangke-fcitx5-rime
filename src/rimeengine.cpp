@@ -19,6 +19,8 @@
 #include <fcitx/candidatelist.h>
 #include <fcitx/inputcontext.h>
 #include <fcitx/inputcontextmanager.h>
+#include <fcitx/inputmethodentry.h>
+#include <fcitx/inputmethodmanager.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/userinterfacemanager.h>
 #include <rime_api.h>
@@ -149,6 +151,8 @@ RimeEngine::RimeEngine(Instance *instance)
 }
 
 RimeEngine::~RimeEngine() {
+    // 泵的回调要碰 api_，必须先摘掉再 finalize。
+    aiPumpEvent_.reset();
     factory_.unregister();
     try {
         if (api_) {
@@ -222,7 +226,7 @@ void RimeEngine::rimeStart(bool fullcheck) {
 }
 
 void RimeEngine::reloadConfig() {
-    readAsIni(config_, "conf/rime.conf");
+    readAsIni(config_, "conf/rime-ai.conf");
     updateConfig();
 }
 
@@ -299,8 +303,7 @@ void RimeEngine::updateConfig() {
 }
 void RimeEngine::activate(const InputMethodEntry &entry,
                            InputContextEvent &event) {
-    // 菜单文字跟 IM 注册名走（inputmethod/rime.conf 的 Name=，打包脚本注入），
-    // 改名只需重打包，无需重编 addon。
+    // 菜单文字跟 IM 注册名走（inputmethod/rime-ai.conf 的 Name=），改名不必动这里。
     configAction_.setShortText(entry.name() + " 设置");
     event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
                                                  imAction_.get());
@@ -355,20 +358,38 @@ void RimeEngine::rimeNotificationHandler(void *context, RimeSessionId session,
         });
 }
 
+// 通知里显示的名字跟「注册名」走：fcitx5 从 inputmethod conf 读到的 Name=，也就是打包时
+// 写死在物料里的品牌名。上游这里写的是 _("Rime")；而这个仓库不装 .mo（po/CMakeLists.txt
+// 因 gettext 0.21 的 bug 关了翻译安装），_() 出来就是英文原样 —— 不跟注册名走的话，
+// 用户看到的永远是「Rime」。
+std::string RimeEngine::displayName() const {
+    std::string result;
+    instance_->inputMethodManager().foreachEntries(
+        [&result](const InputMethodEntry &entry) {
+            if (entry.addon() != FCITX_RIME_ADDON_NAME) {
+                return true;
+            }
+            result = entry.name();
+            return false;
+        });
+    return result.empty() ? FCITX_RIME_ADDON_NAME : result;
+}
+
 void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
                         const std::string &messageValue) {
     const char *message = nullptr;
     const char *icon = "";
     if (messageType == "deploy") {
         icon = "fcitx-rime-deploy";
+        // 正文里不写引擎名 —— 名字由标题带（见下面 showTip 的 displayName()），
+        // 上游那三句 _("Rime ...") 会把这个品牌名顶掉。
         if (messageValue == "start") {
-            message = _("Rime is under maintenance. It may take a few "
-                        "seconds. Please wait until it is finished...");
+            message = _("Deploying. It may take a few seconds, please wait...");
         } else if (messageValue == "success") {
-            message = _("Rime is ready.");
+            message = _("Deployment finished.");
             updateSchemaMenu();
         } else if (messageValue == "failure") {
-            message = _("Rime has encountered an error. "
+            message = _("Deployment failed. "
                         "See /tmp/rime.fcitx.ERROR for details.");
         }
     } else if (messageType == "option") {
@@ -387,13 +408,17 @@ void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
             message = _("Simplified Chinese is enabled.");
         }
     } else if (messageType == "property") {
-        handleReservedProperty(session, messageValue);
+        // 插件自有键空间先认，认不出来再走保留键协议（后者只认 "_" 前缀）。
+        if (!handlePluginProperty(session, messageValue)) {
+            handleReservedProperty(session, messageValue);
+        }
     }
 
     auto notifications = this->notifications();
     if (message && notifications) {
-        notifications->call<INotifications::showTip>(
-            "fcitx-rime-deploy", _("Rime"), icon, _("Rime"), message, -1);
+        const auto name = displayName();
+        notifications->call<INotifications::showTip>("fcitx-rime-deploy", name,
+                                                     icon, name, message, -1);
     }
     timeEvent_ = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
@@ -446,6 +471,112 @@ void RimeEngine::handleReservedProperty(RimeSessionId session,
             }
             return true;
         });
+}
+
+namespace {
+
+// 与 mac 侧（BangkeInputController.pumpAIPrediction）同一套时序。间隔取推理
+// 时间量级的一个零头：太密等于拿 Compose 当轮询使，太疏则候选浮出来时用户
+// 已经按了下一个键，白白多推一轮。
+constexpr uint64_t kAIPumpInterval = 150000;    // 150ms：第一拍，趁推理多半还没回来
+constexpr uint64_t kAIPumpIntervalMax = 600000; // 退避上限
+constexpr uint64_t kAIPumpTimeout = 3000000;    // 3s
+
+} // namespace
+
+bool RimeEngine::handlePluginProperty(RimeSessionId session,
+                                      std::string_view messageValue) {
+    constexpr std::string_view key = reservedproperty::kAIPredictPending;
+    if (messageValue.size() <= key.size() ||
+        messageValue.compare(0, key.size(), key) != 0 ||
+        messageValue[key.size()] != '=') {
+        return false;
+    }
+    // 只有置位才起泵；清空表示这一轮已经了结，泵自己会在下一拍停下来。
+    if (messageValue.substr(key.size() + 1) == "1") {
+        pumpAIPrediction(session);
+    }
+    return true;
+}
+
+bool RimeEngine::isAIPredictionPending(RimeSessionId session) const {
+    char buffer[16] = {};
+    // string_view 由字面量构造，data() 后面就是那个 NUL。
+    if (!api_ || !api_->get_property(session,
+                                     reservedproperty::kAIPredictPending.data(),
+                                     buffer, sizeof(buffer) - 1)) {
+        return false;
+    }
+    return std::string_view(buffer) == "1";
+}
+
+void RimeEngine::pumpAIPrediction(RimeSessionId session) {
+    aiPumpSession_ = session;
+    aiPumpDeadline_ = now(CLOCK_MONOTONIC) + kAIPumpTimeout;
+    if (aiPumpRunning_) {
+        // 已经在泵上：只把截止时间往后延，别叠第二个事件源。
+        return;
+    }
+    aiPumpRunning_ = true;
+    // 起点必须是 kAIPumpInterval：它是逐拍翻倍的，起点为 0 就永远退避不出去，
+    // 变成 0 延迟空转 —— 事件循环被占满，UI 更新送不到客户端（上屏后预编辑区不清）。
+    aiPumpInterval_ = kAIPumpInterval;
+    // 上一轮停下的那个事件源还挂在成员上，这里换掉它（此刻不在它的回调里）。
+    aiPumpEvent_.reset();
+    scheduleAIPumpTick();
+}
+
+void RimeEngine::scheduleAIPumpTick() {
+    aiPumpEvent_ = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + aiPumpInterval_, 0,
+        [this](EventSourceTime *source, uint64_t) {
+            const bool pend = isAIPredictionPending(aiPumpSession_);
+            if (!pend || now(CLOCK_MONOTONIC) >= aiPumpDeadline_) {
+                aiPumpRunning_ = false;
+                return false; // 摘掉事件源；不能在这里 reset 成员（自我销毁）
+            }
+            nudgeComposition(aiPumpSession_);
+            // 退避：每拍翻倍（有上限）。每拍都是一次完整 Compose，长拼音串很贵；
+            // 推理通常 100-400ms 就回来，多数情况一两拍就够，剩下的拍纯属白烧。
+            // 下限兜底：间隔一旦为 0，这个循环退避不出去（见 pumpAIPrediction）。
+            uint64_t nextInterval = aiPumpInterval_ * 2;
+            if (nextInterval < kAIPumpInterval) {
+                nextInterval = kAIPumpInterval;
+            }
+            aiPumpInterval_ = nextInterval < kAIPumpIntervalMax
+                                  ? nextInterval
+                                  : kAIPumpIntervalMax;
+            // fcitx5 的 addTimeEvent 是**一次性**的：回调返回 true 并不会让它重复
+            // （setTime / setNextInterval 都试过，照样只响一次）。所以在事件循环里
+            // 重新挂下一拍 —— 不能在回调里销毁自己，先 return false 让当前这个退场，
+            // 由那个延迟的任务换掉成员并挂新的。
+            eventDispatcher_.schedule([this] {
+                aiPumpEvent_.reset();
+                scheduleAIPumpTick();
+            });
+            return false;
+        });
+}
+
+void RimeEngine::nudgeComposition(RimeSessionId session) {
+    // 重设一个本 addon 从不使用的 option：Context::set_option 即使新旧同值也
+    // 一定发通知，而 ConcreteEngine::OnOptionUpdate 在 composing 时会
+    // RefreshNonConfirmedComposition() —— 那次重排会重跑 Query，缓存里已经有
+    // 结果就把 AI 候选交出来，同时把 pending 清掉，泵下一拍自然停。mac 用
+    // soft_cursor 同理。
+    api_->set_option(session, "soft_cursor",
+                     api_->get_option(session, "soft_cursor"));
+    instance_->inputContextManager().foreach([this, session](InputContext *ic) {
+        if (auto *state = this->state(ic)) {
+            if (state->session() == session) {
+                // 异步刷新：不清面板、不清注释（见 rimestate.h）。
+                state->updateUI(ic, /*keyRelease=*/false,
+                                /*clearReservedComments=*/false,
+                                /*resetPanel=*/false);
+            }
+        }
+        return true;
+    });
 }
 
 void RimeEngine::applyReservedPropertyState(RimeState &state,

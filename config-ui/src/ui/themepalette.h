@@ -4,18 +4,20 @@
 #include <QColor>
 #include <QString>
 
+#include "theme/platformtheme.h"
+
 class QWidget;
 
 namespace bangke {
 
 // 设置程序自身的观感 token。自绘控件不吃 QSS，所以颜色必须能从这里静态取到，
 // 而不是只写在样式表字符串里。
+//
+// 值的来源是 systemtheme（platformtheme.h）里那份进程级系统主题：桌面给得出主题
+// （Omarchy）就用桌面的，否则是 Adwaita/Yaru 那套烘焙常量。这些访问器纯读内存
+// —— 它们会被 paintEvent 高频调用。
 namespace palette {
 
-// 深浅色只判一次（按系统的 GNOME 设置），**不要按控件取**：
-// 控件调色板会被 QSS 改写，而 QSS 又是由这里的颜色生成的 —— 两边各自判断
-// 就会出现「底用浅色画、字用深色方案画」的白底白字（实测踩过）。
-void init();
 bool isDark(const QWidget* widget);
 bool dark();
 
@@ -26,7 +28,7 @@ QColor separator(const QWidget* widget);
 QColor text(const QWidget* widget);
 QColor secondaryText(const QWidget* widget);
 QColor accent(const QWidget* widget);
-QColor sidebarSelection(const QWidget* widget);  // 选中行：accent 22%
+QColor sidebarSelection(const QWidget* widget);  // 选中行
 QColor well(const QWidget* widget);              // 滑杆槽 / 开关轨道未选中态
 
 QString styleSheet(const QWidget* widget);

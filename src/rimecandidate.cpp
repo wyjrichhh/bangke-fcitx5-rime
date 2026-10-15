@@ -5,6 +5,8 @@
  */
 
 #include "rimecandidate.h"
+#include "dbus_public.h"
+#include <fcitx-utils/dbus/bus.h>
 #include <cstring>
 #include <unordered_set>
 
@@ -82,5 +84,21 @@ RimeCandidateList::RimeCandidateList(RimeEngine *engine, InputContext *ic,
             cursor_ = i;
         }
     }
+    // Kimpanel's standard table combines text/comment and reserves its third
+    // array for attributes. Send separate roles so candidate templates work.
+    if (auto *dbus = engine_->dbus()) {
+        auto *bus = dbus->call<IDBusModule::bus>();
+        std::vector<std::string> texts, comments, combined;
+        for (int n=0;n<menu.num_candidates;++n) {
+            std::string text=menu.candidates[n].text ? menu.candidates[n].text : "";
+            std::string comment=menu.candidates[n].comment ? menu.candidates[n].comment : "";
+            texts.push_back(text);comments.push_back(comment);
+            combined.push_back(text+(comment.empty()?"":" ")+comment);
+        }
+        auto message=bus->createSignal("/rime","org.bangke.Candidate1","Candidates");
+        message << combined << texts << comments;
+        message.send();
+    }
+
 }
 } // namespace fcitx

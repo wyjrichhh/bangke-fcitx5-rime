@@ -1,0 +1,52 @@
+# 蚌壳拼音（Arch 线）的打包配方。
+#
+# 这里只做「打包」，不重复编译 —— 编译由 dist/build-arch.sh 在容器里做完（aarch64 / x86_64 共用这一份），
+# 把组好的安装树放到本目录下的 bangke-pkg/（脚本会连 PKGBUILD 一起拷进构建目录）。
+#
+# 与 Ubuntu 线的对应关系：deb 侧是 repack-container.sh 组树 + dpkg-deb；这里是
+# makepkg。两边都从同一批来源取件：私有库（私有代码与种子）+ ~/bangke/vendor（大件）。
+#
+# 用法（由 build-arch.sh 调用）：
+#     makepkg -f      → bangke-pinyin-<版本>-<arch>.pkg.tar.zst
+#     sudo pacman -U bangke-pinyin-*.pkg.tar.zst
+pkgname=bangke-pinyin
+pkgver=5.0.19
+pkgrel=10
+pkgdesc='蚌壳拼音 —— 基于 Rime 的 fcitx5 输入法（含 CTranslate2 AI 预测）'
+arch=('aarch64' 'x86_64')
+url='https://bangke.ai'
+license=('BSD')
+# 运行期依赖。第三方 .so 不随包分发（Arch 由 pacman 保证版本），所以这里必须列全：
+# librime-data 是引擎数据，qt5-wayland 让设置程序在 Wayland 会话下能起来。
+# boost 必须有：librime 与 addon 都链 libboost_filesystem，缺了 addon 直接加载不了
+# （实测表现：fcitx5 里能列出条目但标「不可用」）。
+# **要的是 boost-libs 不是 boost**：Arch 把 boost 拆成两个包 —— `boost` 只有头文件
+# （`pacman -Ql boost` 里一个 .so 都没有），共享库在 `boost-libs`。声明错的那个，
+# 装完系统里照样没有 libboost_filesystem.so.*，加载还是失败。Debian 系没这问题，
+# 一个 libboost-filesystem-dev 全给。
+depends=('fcitx5' 'ca-certificates' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost-libs' 'google-glog'
+         'yaml-cpp' 'gflags' 'leveldb' 'marisa' 'opencc' 'lua' 'python' 'sudo' 'util-linux' 'gtk3' 'gtk-layer-shell'
+         'python-gobject' 'python-cairo' 'python-dbus' 'hyprland' 'gcc' 'pkgconf' 'glib2')
+# 我们的 addon 已改名 rime-ai，addon 自己的文件不再与发行版同名；但设置程序的
+# /usr/bin/fcitx5-rime-config 与 applications/*.desktop 仍与发行版 fcitx5-rime 同路径 ——
+# 不声明关系，pacman 会因为「文件已属于别的包」拒绝安装，或者两份互相覆盖。
+# 我们本来就是它的替代品，且共用同一个 rime 用户目录，所以明确取代、不共存
+# （与 deb 侧 control 里的 Conflicts/Replaces/Provides 同一套语义）。
+conflicts=('fcitx5-rime')
+replaces=('fcitx5-rime')
+provides=('fcitx5-rime')
+optdepends=('noto-fonts-cjk: 面板中文字体（包内已带两款，这是额外兜底）')
+# 装/卸的维护逻辑全在这一个文件里：装完铺种子、注册输入法、按需生成主题；
+# 卸载时对称回收（我们注册的条目、我们生成的面板配置）。
+install=bangke-pinyin.install
+
+# 没有远端来源：安装树是调用方组好放在 $startdir/bangke-pkg 的。
+source=()
+# !debug：两条 Arch 线的 makepkg.conf 不一样（构建机上默认会另出一个 -debug 包），
+# 我们不发布调试符号，统一关掉，免得两条线产物对不上。
+options=('!emptydirs' '!debug')
+
+package() {
+  cp -a "$startdir/bangke-pkg/usr" "$pkgdir/"
+  cp -a "$startdir/bangke-pkg/etc" "$pkgdir/"
+}

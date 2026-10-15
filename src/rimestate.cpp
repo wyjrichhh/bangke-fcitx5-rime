@@ -6,6 +6,8 @@
 
 #include "rimestate.h"
 #include "rimecandidate.h"
+#include "dbus_public.h"
+#include <fcitx-utils/dbus/bus.h>
 #include <fcitx-utils/utf8.h>
 #include <fcitx/candidatelist.h>
 #include <fcitx/inputcontext.h>
@@ -21,6 +23,32 @@ bool emptyExceptAux(const InputPanel &inputPanel) {
            inputPanel.preedit().size() == 0 &&
            (!inputPanel.candidateList() ||
             inputPanel.candidateList()->size() == 0);
+}
+
+// 切换输入法时那个气泡（fcitx5 的「简洁输入法信息」默认开着）只显示这个短标签，
+// 一个字符放不下品牌。方案名是「品牌-方案」（蚌壳-雾凇），取每段首字用 '-' 连起来
+// 就得到「蚌-雾」：既是品牌又能认出是哪个方案。没有 '-' 的方案名照旧取首字。
+std::string shortSchemaLabel(const std::string &name) {
+    if (name.empty() || utf8::lengthValidated(name) == utf8::INVALID_LENGTH) {
+        return name;
+    }
+    std::string result;
+    auto iter = name.begin();
+    while (iter != name.end()) {
+        auto next = utf8::nextChar(iter);
+        if (!result.empty()) {
+            result += '-';
+        }
+        result.append(iter, next);
+        iter = next;
+        while (iter != name.end() && *iter != '-') {
+            iter = utf8::nextChar(iter);
+        }
+        if (iter != name.end()) {
+            ++iter;
+        }
+    }
+    return result;
 }
 } // namespace
 
@@ -70,13 +98,7 @@ std::string RimeState::subModeLabel() {
         } else if (status.is_ascii_mode) {
             result = "A";
         } else if (status.schema_name && status.schema_name[0] != '.') {
-            result = status.schema_name;
-            if (!result.empty() &&
-                utf8::lengthValidated(result) != utf8::INVALID_LENGTH) {
-                result = result.substr(
-                    0, std::distance(result.begin(),
-                                     utf8::nextChar(result.begin())));
-            }
+            result = shortSchemaLabel(status.schema_name);
         }
         engine_->api()->free_status(&status);
     }
@@ -126,10 +148,10 @@ void RimeState::keyEvent(KeyEvent &event) {
         intStates |= (1 << 30);
     }
     auto result = api->process_key(session_, event.rawKey().sym(), intStates);
-
     auto ic = event.inputContext();
     RIME_STRUCT(RimeCommit, commit);
     if (api->get_commit(session_, &commit)) {
+        compositionActive_ = false;
         ic->commitString(commit.text);
         api->free_commit(&commit);
     }
@@ -217,7 +239,12 @@ void RimeState::updatePreedit(InputContext *ic, const RimeContext &context) {
 
     if (engine_->config().showPreeditInApplication.value() &&
         ic->capabilityFlags().test(CapabilityFlag::Preedit)) {
-        clientPreedit = preedit;
+        if (!engine_->config().inlineCandidate.value() || !context.commit_text_preview) {
+            clientPreedit = preedit;
+        } else {
+            clientPreedit = Text(context.commit_text_preview, flag);
+            clientPreedit.setCursor(clientPreedit.textLength());
+        }
     } else {
         ic->inputPanel().setPreedit(preedit);
     }
@@ -253,6 +280,17 @@ void RimeState::updateUI(InputContext *ic, bool keyRelease,
             break;
         }
 
+        const bool active = context.composition.length > 0;
+        if (active && !compositionActive_) ++compositionSerial_;
+        compositionActive_ = active;
+        // Give the panel an explicit lifecycle; asynchronous AI refreshes keep
+        // the same origin, while a rapid commit/new input must get a new one.
+        if (auto *dbus = engine_->dbus()) {
+            auto message = dbus->call<IDBusModule::bus>()->createSignal(
+                "/rime", "org.bangke.Candidate1", "Composition");
+            message << (std::to_string(session_) + ":" + std::to_string(compositionSerial_)) << active;
+            message.send();
+        }
         updatePreedit(ic, context);
 
         if (context.menu.num_candidates) {

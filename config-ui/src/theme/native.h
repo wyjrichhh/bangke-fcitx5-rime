@@ -5,13 +5,16 @@
 #include <QHash>
 #include <QString>
 
-// native（系统配色）方案的两套色。
+// native（系统配色）方案的**烘焙**两套色。
 //
 // macOS 上 native 由 AppKit 语义色动态解析（windowBackgroundColor /
 // selectedTextBackgroundColor / labelColor / secondaryLabelColor）；其它平台没有
 // 对应的动态通道，于是 2026-09 在 macOS 26 上实测后固化为常量，且不跟随用户
 // 自定义强调色 —— 三端一致。常量沿用 Windows 侧 include/BangkeNativeTheme.h，
 // 语义是 AARRGGBB。
+//
+// 这里是**兜底**：桌面自己能给颜色时（Omarchy 的 colors.toml/shell.toml，
+// 见 platformtheme.h）优先用桌面的，这套常量是「桌面没得读」时的结果。
 namespace bangke {
 
 struct NativePalette {
@@ -41,7 +44,7 @@ inline QColor argb(quint32 v) {
 }
 
 // 以 yaml 方案键的形态给出颜色表，让 native 与普通方案走同一条解析路径。
-inline QHash<QString, QColor> nativeSchemeColors(bool dark) {
+inline QHash<QString, QColor> bakedNativeSchemeColors(bool dark) {
   const NativePalette& p = dark ? kNativeDark : kNativeLight;
   return {
       {QStringLiteral("back_color"), argb(p.back)},
