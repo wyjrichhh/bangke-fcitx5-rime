@@ -21,7 +21,8 @@ try:
   message=dbus.lowlevel.SignalMessage('/kimpanel','org.kde.kimpanel.inputmethod',name)
   message.append(*args,signature=signature);bus.send_message(message);bus.flush()
  signal('RegisterProperties',[['/Fcitx/im:蚌壳拼音:input-keyboard:Bangke:0:0']],'as')
- subprocess.run([str(SOURCE / 'config-ui/build/custompanel_save_test')],env=env,check=True)
+ # Xvfb cannot supply Hyprland backdrop effects; exercise every other setting.
+ subprocess.run([str(SOURCE / 'config-ui/build/custompanel_save_test'), '--without-blur'],env=env,check=True)
  got=json.loads(str(panel.GetAppearance()));assert got['style']['candidate_list_layout']=='linear'
  for mode in ('linear','stacked'):
   got['style'].update(candidate_list_layout=mode,font_point='24',alpha='.65',hilited_corner_radius='10',line_spacing='14',spacing='12',show_paging='true',inline_preedit='false',candidate_format='[candidate] / [label]: [comment]')

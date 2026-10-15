@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (!RimeDeploy::usesCustomPanel()) return 1;
+  const bool withoutBlur = app.arguments().contains("--without-blur");
   if (app.arguments().contains("--inactive")) {
     MainWindow window;
     bool corner = false;
@@ -94,7 +95,9 @@ int main(int argc, char** argv) {
       {QStringLiteral("显示翻页按钮"), "show_paging"}};
     for (auto* row : window.findChildren<bangke::ToggleRow*>())
       for (auto* label : row->findChildren<QLabel*>())
-        if (toggles.contains(label->text())) row->setChecked(orientation == "vertical");
+        if (toggles.contains(label->text()))
+          row->setChecked(orientation == "vertical" &&
+              !(withoutBlur && toggles.value(label->text()) == "translucency"));
     for (auto* row : window.findChildren<bangke::TextRow*>())
       for (auto* label : row->findChildren<QLabel*>())
         if (label->text() == QStringLiteral("候选格式")) row->setText("[label]. [candidate] ([comment])");
@@ -118,7 +121,8 @@ int main(int argc, char** argv) {
     for (auto it = expected.begin(); it != expected.end(); ++it)
       if (qAbs(style[it.key()].toVariant().toDouble() - it.value()) > .001) return 8;
     for (const auto& key : toggles)
-      if (style[key].toVariant().toString() != (orientation == "vertical" ? "true" : "false")) return 10;
+      if (style[key].toVariant().toString() !=
+          (orientation == "vertical" && !(withoutBlur && key == "translucency") ? "true" : "false")) return 10;
     if (style["text_orientation"].toString() != orientation ||
         style["candidate_format"].toString() != "[label]. [candidate] ([comment])") return 11;
     MainWindow reopened;
