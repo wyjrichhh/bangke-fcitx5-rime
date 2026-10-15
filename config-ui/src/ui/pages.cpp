@@ -172,7 +172,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   }
 
   addSection(QStringLiteral("颜色"));
-  scheme_ = new ComboRow(QStringLiteral("配色方案"), customPanel_ ? QStringLiteral("选择「跟随 Omarchy 系统主题」自动切换；选择具体配色则固定使用。") : QString(), schemeNames,
+  scheme_ = new ComboRow(QStringLiteral("配色方案"), customPanel_ ? QStringLiteral("选择系统配色自动切换；选择具体配色则固定使用。") : QString(), schemeNames,
                          schemeIds, style.colorScheme, this);
   addRow(scheme_);
   if (customPanel_ || fcitxSupportsDarkTheme()) {
@@ -211,6 +211,9 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
       {QStringLiteral("horizontal"), QStringLiteral("vertical")},
       style.textOrientation, this);
   addRow(orientation_);
+  if (qgetenv("BANGKE_PANEL_BACKEND") == "gnome") {
+    orientation_->setToolTip(QStringLiteral("竖排时每个候选逐字纵向显示。"));
+  }
   corner_ = new SliderRow(
       QStringLiteral("圆角半径"),
       QStringLiteral("候选面板的圆角半径。"),
@@ -229,7 +232,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   addRow(border_);
   if (customPanel_) {
     borderHeight_ = new SliderRow(QStringLiteral("边框高度"), QStringLiteral("与边框宽度取较小值作为描边粗细；0 关闭描边。"), 0, 20, 1, qMax(0, style.borderHeight), QStringLiteral(" pt"), this);
-    highlightCorner_ = new SliderRow(QStringLiteral("高亮圆角"), QStringLiteral("贴边高亮跟随面板圆角，内部保持直角；此独立圆角值保留供其他面板使用。"), 0, 30, 1, style.hilitedCornerRadius, QStringLiteral(" pt"), this);
+    highlightCorner_ = new SliderRow(QStringLiteral("高亮圆角"), QStringLiteral("高亮贴合面板边缘：首尾跟随面板圆角，中间保持直角。"), 0, 30, 1, style.hilitedCornerRadius, QStringLiteral(" pt"), this);
     highlightCorner_->setEnabled(false);
     lineSpacing_ = new SliderRow(QStringLiteral("行间距"), QString(), -10, 30, 1, style.lineSpacing, QStringLiteral(" pt"), this);
     spacing_ = new SliderRow(QStringLiteral("预编辑间距"), QStringLiteral("拼音显示在面板时，与候选之间的距离。"), -10, 30, 1, style.spacing, QStringLiteral(" pt"), this);
@@ -237,8 +240,11 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
     inlinePreedit_ = new ToggleRow(QStringLiteral("在输入框中显示预编辑"), QStringLiteral("关闭后拼音显示在候选面板顶部。"), style.inlinePreedit, this);
     inlineCandidate_ = new ToggleRow(QStringLiteral("在输入框中显示选中候选"), QStringLiteral("应用支持预编辑且上项开启时生效。"), style.inlineCandidate, this);
     memorizeSize_ = new ToggleRow(QStringLiteral("记忆本次输入的面板宽度"), QStringLiteral("连续输入时只扩宽，结束本次输入后重置，减少晃动。"), style.memorizeSize, this);
-    translucency_ = new ToggleRow(QStringLiteral("毛玻璃背景"),QStringLiteral("由 Hyprland 绘制；系统模糊需开启，并将背景透明度调高于 0。"),style.translucency,this);
+    translucency_ = new ToggleRow(QStringLiteral("毛玻璃背景"),QStringLiteral("由桌面合成器绘制；将背景透明度调高于 0 可见毛玻璃效果。"),style.translucency,this);
     mutualExclusive_ = new ToggleRow(QStringLiteral("避免透明颜色叠加"), QStringLiteral("高亮区域直接显示高亮色，不透出面板底色。"), style.mutualExclusive, this);
+    if (qgetenv("BANGKE_PANEL_BACKEND") == "gnome") {
+      mutualExclusive_->setToolTip(QStringLiteral("高亮区域移除面板底色，避免两层透明背景叠加。"));
+    }
     for (auto* row : {inlinePreedit_, inlineCandidate_, memorizeSize_, mutualExclusive_, translucency_}) addRow(row);
     candidateFormat_ = new TextRow(QStringLiteral("候选格式"), QStringLiteral("支持 [label]、[candidate]、[comment]，例如 [label]. [candidate] [comment]。"), style.candidateFormat, this);
     addRow(candidateFormat_);

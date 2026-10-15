@@ -266,7 +266,9 @@ void MainWindow::saveAndDeploy() {
       close();
     } else {
       status_->setText(errors.join(QLatin1Char('\n')));
-      QMessageBox::information(this, QStringLiteral("已保存"), status_->text());
+      // Keep partial-application feedback in the themed settings window.
+      // Saving appearance never requires a desktop-session restart dialog.
+      status_->setToolTip(status_->text());
     }
     return;
   }

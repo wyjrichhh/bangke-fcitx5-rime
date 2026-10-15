@@ -31,7 +31,7 @@ def check(service):
 with tempfile.TemporaryDirectory() as home:
     env=dict(os.environ,HOME=home,XDG_CONFIG_HOME=home+'/.config',XDG_DATA_HOME=home+'/.local/share')
     with open('/tmp/bangke-tray-fcitx.log','w') as log:
-        proc=subprocess.Popen(['fcitx5','-D','-k','--disable','classicui,wayland,xcb','--enable','notificationitem,bangke-tray','-u','kimpanel'],env=env,stdout=log,stderr=log)
+        proc=subprocess.Popen(['fcitx5','-D','--keep','--disable','classicui,wayland,xcb','--enable','notificationitem,bangke-tray','-u','kimpanel'],env=env,stdout=log,stderr=log)
         GLib.timeout_add_seconds(12,lambda: (loop.quit(),False)[1]); loop.run()
         proc.terminate(); proc.wait(timeout=5)
     output=open('/tmp/bangke-tray-fcitx.log').read()

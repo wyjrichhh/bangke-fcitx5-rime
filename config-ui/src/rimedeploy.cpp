@@ -1,5 +1,9 @@
 #include "rimedeploy.h"
 
+#include <QDir>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QDBusConnection>
 #include <QDBusError>
 #include <QDBusInterface>
@@ -96,27 +100,60 @@ QDBusMessage panelCall(const QString& method, const QVariantList& args = {}) {
 }
 }
 
+void RimeDeploy::ensurePanel() {
+  const QString desktop = QString::fromLocal8Bit(qgetenv("XDG_CURRENT_DESKTOP"));
+  if (!desktop.contains(QStringLiteral("GNOME"), Qt::CaseInsensitive)) return;
+  const auto identity = panelCall(QStringLiteral("GetPanelIdentity"));
+  // Respect another panel and avoid interrupting a running input session.
+  if (identity.type() == QDBusMessage::ReplyMessage ||
+      identity.errorName() != QStringLiteral("org.freedesktop.DBus.Error.ServiceUnknown")) return;
+  auto message = QDBusMessage::createMethodCall(QStringLiteral("org.gnome.Shell.Extensions"),
+      QStringLiteral("/org/gnome/Shell/Extensions"), QStringLiteral("org.gnome.Shell.Extensions"),
+      QStringLiteral("EnableExtension"));
+  message.setArguments({QStringLiteral("bangke-panel@bangke.org")});
+  QDBusConnection::sessionBus().call(message, QDBus::Block, 2000);
+}
+
 bool RimeDeploy::usesCustomPanel() {
   if (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel") return true;
   const auto reply = panelCall(QStringLiteral("GetPanelIdentity"));
-  return reply.type() == QDBusMessage::ReplyMessage &&
-         reply.arguments().value(0).toString().startsWith(QStringLiteral("bangke-panel:"));
+  if (reply.type() == QDBusMessage::ReplyMessage)
+    return reply.arguments().value(0).toString().startsWith(QStringLiteral("bangke-panel:"));
+  // System extensions become discoverable only after the next GNOME login.
+  // Keep the complete editor available in that interval, without taking over
+  // an existing third-party panel.
+  const QString desktop = QString::fromLocal8Bit(qgetenv("XDG_CURRENT_DESKTOP"));
+  return desktop.contains(QStringLiteral("GNOME"), Qt::CaseInsensitive) &&
+         reply.errorName() == QStringLiteral("org.freedesktop.DBus.Error.ServiceUnknown") &&
+         QFileInfo::exists(QStringLiteral("/usr/share/gnome-shell/extensions/bangke-panel@bangke.org/metadata.json"));
 }
 
 QString RimeDeploy::setCustomPanelLayout(const QString& orientation) {
   const auto reply = panelCall(QStringLiteral("SetLayout"), {orientation});
   if (reply.type() == QDBusMessage::ErrorMessage ||
       reply.arguments().value(0).toString() != orientation) {
-    return QStringLiteral("配置已保存，但自绘面板未确认布局更新：%1。请检查 bangke-panel 服务。")
+    return QStringLiteral("配置已保存，但自绘面板未确认布局更新：%1。候选面板暂时不可用。")
         .arg(reply.errorMessage());
   }
   return QString();
 }
 
 QString RimeDeploy::setCustomPanelAppearance(const QString& appearance) {
+  ensurePanel();
   const auto reply = panelCall(QStringLiteral("SetAppearance"), {appearance});
-  if (reply.type() == QDBusMessage::ErrorMessage)
-    return QStringLiteral("外观已保存，但应用到候选面板失败：%1。请安装新版候选面板后重试。").arg(reply.errorMessage());
+  if (reply.type() == QDBusMessage::ErrorMessage) {
+    if (qgetenv("BANGKE_PANEL_BACKEND") == "gnome" &&
+        reply.errorName() == QStringLiteral("org.freedesktop.DBus.Error.ServiceUnknown")) {
+      const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/bangke-panel");
+      QSaveFile file(dir + QStringLiteral("/appearance.json"));
+      const QByteArray bytes = appearance.toUtf8();
+      if (!QDir().mkpath(dir) || !file.open(QIODevice::WriteOnly) ||
+          file.write(bytes) != bytes.size() || !file.commit())
+        return QStringLiteral("外观已保存到 YAML，但面板配置文件写入失败。");
+      return QStringLiteral("已保存。当前桌面尚未启用完整外观效果，输入可继续使用。");
+    }
+    return QStringLiteral("外观已保存，但应用到候选面板失败：%1。请稍后重试。").arg(reply.errorMessage());
+  }
   if (reply.arguments().value(0).toString() != QStringLiteral("applied:1"))
     return QStringLiteral("候选面板未确认外观设置已应用。");
   return QString();

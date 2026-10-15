@@ -9,7 +9,7 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 # User systemd keeps the compositor environment even when pacman runs from sudo.
 while IFS='=' read -r name value; do
   case "$name" in
-    WAYLAND_DISPLAY|DISPLAY|HYPRLAND_INSTANCE_SIGNATURE|XDG_CURRENT_DESKTOP|XDG_SESSION_TYPE)
+    WAYLAND_DISPLAY|DISPLAY|XAUTHORITY|HYPRLAND_INSTANCE_SIGNATURE|XDG_CURRENT_DESKTOP|XDG_SESSION_TYPE)
       [[ -n ${!name:-} ]] || export "$name=$value" ;;
   esac
 done < <(systemctl --user show-environment 2>/dev/null || true)
@@ -58,6 +58,9 @@ trap restart EXIT
 EXTRA=()
 [[ ! -f /usr/share/bangke-pinyin/ubuntu && ! -f "$BASE/ubuntu" ]] || EXTRA=(--ubuntu)
 python3 "$BASE/user-data.py" "$ACTION" "${EXTRA[@]}"
+if ((${#EXTRA[@]})) && [[ -f "$BASE/gnome.sh" ]]; then
+  bash "$BASE/gnome.sh" "$ACTION" || echo 'GNOME panel setup deferred; retaining existing UI'
+fi
 if [[ -f /usr/share/bangke-pinyin/omarchy || -f "$BASE/omarchy" ]]; then
   if [[ $ACTION == install ]]; then
     # Migrate only the exact experimental launch paths; retain unrelated Hyprland configuration.

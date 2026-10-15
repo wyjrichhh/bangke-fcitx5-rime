@@ -1,0 +1,10 @@
+{
+  "uuid": "bangke-panel@bangke.org",
+  "name": "Bangke candidate panel",
+  "description": "Bangke Fcitx5 candidate panel with shared appearance settings",
+  "shell-version": [
+    "46"
+  ],
+  "version": 4,
+  "url": "https://github.com/bangke-ai"
+}

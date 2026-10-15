@@ -99,7 +99,9 @@ QString styleSheet(const QWidget* widget) {
   // 所以把用到的都自己画一遍。
   return QStringLiteral(R"(
 QWidget { color: %1; font-size: 13px; }
-QMainWindow, QStackedWidget { background: %2; }
+QMainWindow, QStackedWidget, QDialog, QMessageBox { background: %2; color: %1; }
+QMessageBox QLabel { background: transparent; color: %1; }
+QMessageBox QTextEdit { background: %4; color: %1; }
 QWidget#brandNavigation { background: %10; }
 QLabel[secondary="true"] { color: %9; }
 QLabel#pageTitle { font-size: 26px; font-weight: 600; }
