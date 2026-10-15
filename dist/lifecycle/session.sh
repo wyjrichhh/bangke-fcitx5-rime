@@ -19,6 +19,7 @@ flock -x 9
 exec >> "$CACHE/setup.log" 2>&1
 echo "$(date -Is) $ACTION"
 BASE="${BANGKE_LIFECYCLE_DIR:-/usr/lib/bangke-pinyin}"
+systemctl --user stop bangke-update-monitor.service || true
 UNIT=omarchy-fcitx5.service
 MANAGED=0
 RUNNING=0
@@ -44,6 +45,9 @@ else
 fi
 restart() {
   systemctl --user daemon-reload || true
+  if [[ $ACTION == install ]] && systemctl --user is-active --quiet graphical-session.target; then
+    systemctl --user start bangke-update-monitor.service || true
+  fi
   if [[ $MANAGED == 1 ]]; then
     systemctl --user start "$UNIT" || true
   elif [[ $RUNNING == 1 ]]; then
@@ -72,7 +76,7 @@ if [[ -f /usr/share/bangke-pinyin/omarchy || -f "$BASE/omarchy" ]]; then
       fi
     fi
   else
-    systemctl --user stop bangke-panel.service bangke-caret.service || true
+    systemctl --user stop bangke-update-monitor.service bangke-panel.service bangke-caret.service || true
     rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-kimpanel.conf"
     python3 "$BASE/migrate-experiment.py" --remove
   fi

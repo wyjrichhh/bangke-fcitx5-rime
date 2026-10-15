@@ -13,6 +13,18 @@ Name=Bangke Pinyin initialization
 Exec=/usr/lib/bangke-pinyin/session.sh install
 NoDisplay=true
 EOF
+mkdir -p "$ROOT/usr/lib/systemd/user" "$ROOT/etc/systemd/user/graphical-session.target.wants"
+ln -sfn /usr/lib/systemd/user/bangke-update-monitor.service "$ROOT/etc/systemd/user/graphical-session.target.wants/bangke-update-monitor.service"
+cat > "$ROOT/usr/lib/systemd/user/bangke-update-monitor.service" <<'EOF'
+[Unit]
+Description=Bangke software update notifications
+PartOf=graphical-session.target
+After=graphical-session.target
+[Service]
+ExecStart=/usr/bin/fcitx5-rime-config --update-monitor
+Restart=on-failure
+RestartSec=60
+EOF
 touch "$ROOT/usr/share/bangke-pinyin/$PLATFORM"
 if [[ $PLATFORM == omarchy ]]; then
   touch "$ROOT/usr/share/bangke-pinyin/omarchy"

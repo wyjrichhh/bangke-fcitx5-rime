@@ -1,4 +1,12 @@
 #include <QApplication>
+#include <QCoreApplication>
+#include <QStandardPaths>
+#include <QDir>
+#include <QLockFile>
+#include <QDBusInterface>
+#include <QDBusConnection>
+#include "update/updatechecker.h"
+#include "update/platform.h"
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QString>
@@ -97,6 +105,31 @@ int runDumpPreview(const QString& path) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  // Background monitor never initializes Rime, themes or a GUI backend.
+  if (argc > 1 && QString::fromLocal8Bit(argv[1]) == "--update-monitor") {
+    QCoreApplication app(argc, argv);
+    const auto state = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/bangke-updates";
+    QDir().mkpath(state);
+    QLockFile lock(state + "/monitor.lock");
+    if (!lock.tryLock()) return 0;
+    bangke::UpdateChecker checker(bangke::updateTarget(), bangke::installedUpdateVersion());
+    QObject::connect(&checker, &bangke::UpdateChecker::available, &app,
+      [](const QString& version, const QUrl&, const QString&, bool) {
+        QDBusInterface notify("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                             "org.freedesktop.Notifications", QDBusConnection::sessionBus());
+        notify.asyncCall("Notify", "蚌壳拼音", uint(0), "input-keyboard", "蚌壳拼音有新版本",
+          QString("版本 %1 已发布，请打开蚌壳设置 → 关于 → 检查更新。").arg(version),
+          QStringList(), QVariantMap(), int(-1));
+      });
+    QTimer timer;
+    QObject::connect(&timer, &QTimer::timeout, &checker, [&checker]() { checker.check(false); });
+    timer.setTimerType(Qt::PreciseTimer);
+    QTimer::singleShot(30000, &checker, [&checker, &timer]() {
+      checker.check(false);
+      timer.start(60 * 60 * 1000);
+    });
+    return app.exec();
+  }
   // 无显示环境下也能生成主题（验收脚本、容器里都用得上）。
   bool generateTheme = false;
   bool dumpThemeState = false;

@@ -1,3 +1,8 @@
+#include "update/updatechecker.h"
+#include "update/platform.h"
+#include <QMessageBox>
+#include <QDesktopServices>
+#include <QPushButton>
 #include "ui/pages.h"
 #include "rimedeploy.h"
 #include <QLineEdit>
@@ -14,9 +19,7 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
-#include <QMessageBox>
 #include <QProcess>
-#include <QPushButton>
 #include <QRegularExpression>
 #include <QVBoxLayout>
 
@@ -582,6 +585,35 @@ AboutPage::AboutPage(QWidget* parent)
   addRow(new RowShell(QStringLiteral("输入法框架"), QString(),
                      new QLabel(fcitx.isEmpty() ? QStringLiteral("fcitx5")
                                                : QStringLiteral("fcitx5 %1").arg(fcitx), this), this));
+  auto* updates = new UpdateChecker(updateTarget(), installedUpdateVersion(), this);
+  auto* check = new QPushButton(QStringLiteral("检查更新"), this);
+  auto* automatic = new QCheckBox(QStringLiteral("每小时自动检查更新"), this);
+  automatic->setChecked(updates->automatic());
+  connect(automatic, &QCheckBox::toggled, updates, &UpdateChecker::setAutomatic);
+  connect(check, &QPushButton::clicked, updates, [updates]() { updates->check(); });
+  connect(updates, &UpdateChecker::checkingChanged, check, [updates, check]() {
+    check->setEnabled(!updates->checking());
+    check->setText(updates->checking() ? QStringLiteral("正在检查…") : QStringLiteral("检查更新"));
+  });
+  connect(updates, &UpdateChecker::finished, this, [this](const QString& message, bool manual) {
+    if (manual) QMessageBox::information(this, QStringLiteral("软件更新"), message);
+  });
+  connect(updates, &UpdateChecker::available, this,
+    [this, updates](const QString& latest, const QUrl& url, const QString& notes, bool) {
+      QMessageBox box(this);
+      box.setWindowTitle(QStringLiteral("蚌壳拼音有新版本"));
+      box.setTextFormat(Qt::PlainText);
+      box.setText(QStringLiteral("版本 %1 已发布。\n\n%2\n\n下载后使用系统安装工具更新，用户配置会保留。").arg(latest, notes));
+      auto* download = box.addButton(QStringLiteral("前往下载"), QMessageBox::AcceptRole);
+      auto* skip = box.addButton(QStringLiteral("跳过此版本"), QMessageBox::DestructiveRole);
+      box.addButton(QStringLiteral("稍后提醒"), QMessageBox::RejectRole);
+      box.exec();
+      if (box.clickedButton() == download) QDesktopServices::openUrl(url);
+      if (box.clickedButton() == skip) updates->skipVersion(latest);
+    });
+  addSection(QStringLiteral("软件更新"));
+  addRow(new RowShell(QStringLiteral("官网稳定版"), QStringLiteral("仅获取版本信息，不上传输入内容。"), check, this));
+  addRow(new RowShell(QStringLiteral("更新提醒"), QString(), automatic, this));
   addSection(QStringLiteral("运行方式"));
   addRow(new RowShell(QStringLiteral("本地推理"),
                      QStringLiteral("AI 模型在本机运行，输入内容不上传。"), nullptr, this));

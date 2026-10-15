@@ -24,7 +24,7 @@ license=('BSD')
 # （`pacman -Ql boost` 里一个 .so 都没有），共享库在 `boost-libs`。声明错的那个，
 # 装完系统里照样没有 libboost_filesystem.so.*，加载还是失败。Debian 系没这问题，
 # 一个 libboost-filesystem-dev 全给。
-depends=('fcitx5' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost-libs' 'google-glog'
+depends=('fcitx5' 'ca-certificates' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost-libs' 'google-glog'
          'yaml-cpp' 'gflags' 'leveldb' 'marisa' 'opencc' 'lua' 'python' 'sudo' 'util-linux' 'gtk3' 'gtk-layer-shell'
          'python-gobject' 'python-cairo' 'python-dbus' 'hyprland' 'gcc' 'pkgconf' 'glib2')
 # 我们的 addon 已改名 rime-ai，addon 自己的文件不再与发行版同名；但设置程序的

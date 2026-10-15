@@ -8,6 +8,8 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt5 REQUIRED COMPONENTS Widgets DBus Network Gui Core)
 
 add_executable(fcitx5-rime-config
+    src/update/updatechecker.cpp
+    src/update/updatechecker.h
     src/fcitxprofile.cpp
     src/fcitxprofile.h
     src/main.cpp
@@ -93,8 +95,8 @@ if (TARGET Qt5::Test)
         src/ui/themepalette.cpp src/ui/widgets.cpp
     )
     target_include_directories(page_test PRIVATE src)
-    target_link_libraries(page_test PRIVATE Qt5::Widgets Qt5::Test Qt5::DBus)
-    target_sources(page_test PRIVATE src/rimedeploy.cpp)
+    target_link_libraries(page_test PRIVATE Qt5::Widgets Qt5::Test Qt5::DBus Qt5::Network)
+    target_sources(page_test PRIVATE src/rimedeploy.cpp src/update/updatechecker.cpp src/update/updatechecker.h)
 
 endif ()
 
@@ -154,3 +156,8 @@ target_compile_definitions(configuration_test PRIVATE BANGKE_TEST_FIXTURES="${CM
 target_link_libraries(configuration_test PRIVATE Qt5::Widgets Qt5::DBus Qt5::Network)
 # Assertions must remain active in Release validation builds.
 target_compile_options(configuration_test PRIVATE -UNDEBUG)
+
+add_executable(updatechecker_test EXCLUDE_FROM_ALL
+    tests/updatechecker_test.cpp src/update/updatechecker.cpp src/update/updatechecker.h)
+target_include_directories(updatechecker_test PRIVATE src)
+target_link_libraries(updatechecker_test PRIVATE Qt5::Core Qt5::Network)
