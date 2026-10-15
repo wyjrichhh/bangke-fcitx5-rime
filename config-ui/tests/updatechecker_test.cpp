@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
   if (app.arguments().contains("--live")) {
     bangke::UpdateChecker live("windows", "999.0.0");
     QObject::connect(&live, &bangke::UpdateChecker::finished, &app, [&](const QString& message, bool) {
-      const bool ok = message == QStringLiteral("当前已是最新版本。");
+      const bool ok = message.startsWith(QStringLiteral("当前已是最新版本")) && message.contains("999.0.0");
       std::fprintf(stdout, "%s HTTPS update endpoint: %s\n", ok ? "PASS" : "FAIL", message.toUtf8().constData());
       app.exit(ok ? 0 : 1);
     });
@@ -127,5 +127,44 @@ int main(int argc, char** argv) {
   network.body = make("windows", "0.9", origin + "BangkeSetup-0.9-win64.exe");
   simulated.check(true); settle();
   REQUIRE(offers == 1 && errors == 2); // No downgrade offer.
+  FakeNetwork ubuntu;
+  ubuntu.body = make("ubuntu24-amd64", "5.0.20", origin + "fcitx5-rime-ai-predict_5.0.20_amd64.deb");
+  for (const QString current : {QString("5.0.19+main1"), QString("5.0.19+gnome4"), QString("5.0.20"), QString("5.0.21")}) {
+    bangke::UpdateChecker local("ubuntu24-amd64", current, nullptr, &ubuntu);
+    local.setAutomatic(false);
+    local.skipVersion("5.0.20");
+    int available = 0;
+    QString result;
+    bool downloadMatches = false;
+    QObject::connect(&local, &bangke::UpdateChecker::available,
+      [&](const QString& latest, const QUrl& url, const QString&, bool manual) {
+        ++available;
+        downloadMatches = manual && latest == "5.0.20" &&
+            url == QUrl(origin + "fcitx5-rime-ai-predict_5.0.20_amd64.deb");
+      });
+    QObject::connect(&local, &bangke::UpdateChecker::finished,
+      [&](const QString& message, bool manual) { if (manual) result = message; });
+    auto wait = [&]() {
+      QEventLoop loop;
+      QObject::connect(&local, &bangke::UpdateChecker::checkingChanged, &loop,
+        [&]() { if (!local.checking()) loop.quit(); });
+      QTimer::singleShot(1000, &loop, &QEventLoop::quit);
+      if (local.checking()) loop.exec();
+    };
+    const int before = ubuntu.requests;
+    local.check(true); wait();
+    REQUIRE(ubuntu.requests == before + 1 && local.currentVersion() == current);
+    if (current.startsWith("5.0.19")) REQUIRE(available == 1 && downloadMatches && result.isEmpty());
+    else REQUIRE(available == 0 && result.contains("无需下载") && result.contains(current) && result.contains("5.0.20"));
+    local.check(true); wait(); // A second click bypasses successful-check throttling too.
+    REQUIRE(ubuntu.requests == before + 2);
+    ubuntu.fail = true;
+    local.check(true); wait();
+    REQUIRE(result.contains("暂时无法检查更新") && !local.checking());
+    ubuntu.fail = false;
+  }
+  REQUIRE(bangke::UpdateChecker::selectRelease(make("ubuntu24-amd64", "5.0.20+main1",
+      origin + "fcitx5-rime-ai-predict_5.0.20_amd64.deb"), "ubuntu24-amd64", &error).isEmpty());
+  std::puts("PASS Ubuntu test versions query immediately, manual repeat/opt-out/skip override, explicit results, latest installer link and network failures");
   std::puts("PASS versions, target isolation, trusted links, opt-out, skip, hourly throttle, manual override, offline recovery and no downgrade");
 }

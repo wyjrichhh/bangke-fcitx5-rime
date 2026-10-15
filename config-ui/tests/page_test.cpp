@@ -10,6 +10,10 @@
 #include <QScrollArea>
 #include <QTest>
 #include <QTimer>
+#include <QMessageBox>
+#include <QAbstractButton>
+#include <QDesktopServices>
+#include "update/updatechecker.h"
 #include <cstdio>
 
 #include "theme/paths.h"
@@ -17,8 +21,54 @@
 #include "ui/pages.h"
 #include "ui/widgets.h"
 
+class DownloadRecorder : public QObject {
+  Q_OBJECT
+ public:
+  QUrl opened;
+ public slots:
+  void open(const QUrl& url) { opened = url; }
+};
+
 int main(int argc, char** argv) {
   QApplication app(argc, argv);
+  if (app.arguments().contains("--updates")) {
+    bangke::AboutPage about;
+    auto* checker = about.findChild<bangke::UpdateChecker*>();
+    if (!checker || checker->currentVersion().isEmpty()) return 2;
+    DownloadRecorder recorder;
+    QDesktopServices::setUrlHandler("https", &recorder, "open");
+    bool valid = false;
+    QTimer::singleShot(0, [&]() {
+      auto* box = qobject_cast<QMessageBox*>(app.activeModalWidget());
+      if (!box) return;
+      valid = box->text().contains(checker->currentVersion()) && box->text().contains("5.0.20");
+      for (auto* button : box->buttons()) {
+        if (button->text() == QStringLiteral("下载最新安装包")) {
+          button->click();
+          return;
+        }
+      }
+      valid = false;
+      box->reject();
+    });
+    const QUrl installer("https://shellim.openbankai.com/get/fcitx5-rime-ai-predict_5.0.20_amd64.deb");
+    checker->available("5.0.20", installer, "更新说明", true);
+    if (!valid || recorder.opened != installer) return 3;
+    for (const QString result : {QStringLiteral("当前已是最新版本，无需下载。"), QStringLiteral("暂时无法检查更新，请稍后重试。")}) {
+      valid = false;
+      QTimer::singleShot(0, [&]() {
+        auto* box = qobject_cast<QMessageBox*>(app.activeModalWidget());
+        if (!box) return;
+        valid = box->text() == result;
+        box->accept();
+      });
+      checker->finished(result, true);
+      if (!valid) return 4;
+    }
+    QDesktopServices::unsetUrlHandler("https");
+    puts("PASS actual About dialogs show versions, latest/no-update/failure results; download button opens exact installer URL");
+    return 0;
+  }
 
   const bangke::BangkeConfig config = bangke::BangkeConfig::load(
       bangke::paths::sharedBangkeYaml(), bangke::paths::customBangkeYaml());
@@ -59,3 +109,5 @@ int main(int argc, char** argv) {
   });
   return app.exec();
 }
+
+#include "page_test.moc"

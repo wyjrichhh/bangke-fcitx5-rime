@@ -16,6 +16,7 @@ class UpdateChecker : public QObject {
                 QNetworkAccessManager* transport = nullptr);
   bool automatic() const;
   bool checking() const { return checking_; }
+  QString currentVersion() const { return current_; }
   Q_INVOKABLE void setAutomatic(bool enabled);
   Q_INVOKABLE void check(bool manual = true);
   Q_INVOKABLE void skipVersion(const QString& version);
@@ -28,7 +29,7 @@ class UpdateChecker : public QObject {
   void available(const QString& version, const QUrl& url, const QString& notes, bool manual);
   void finished(const QString& message, bool manual);
  private:
-  QString target_, current_;
+  QString target_, current_, comparisonCurrent_;
   QNetworkAccessManager network_;
   QNetworkAccessManager* transport_;
   mutable QSettings settings_;

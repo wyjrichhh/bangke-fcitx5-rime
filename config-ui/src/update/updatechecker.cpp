@@ -28,7 +28,14 @@ QList<qulonglong> components(QString s, bool* ok) {
 UpdateChecker::UpdateChecker(QString target, QString currentVersion, QObject* parent, QNetworkAccessManager* transport)
     : QObject(parent), target_(std::move(target)), current_(std::move(currentVersion)),
       network_(this), transport_(transport ? transport : &network_), settings_(QSettings::IniFormat, QSettings::UserScope,
-                               QStringLiteral("Bangke"), QStringLiteral("Updates")) {}
+                               QStringLiteral("Bangke"), QStringLiteral("Updates")) {
+  comparisonCurrent_ = current_;
+  // Our locally tested Debian builds carry +mainN/+gnomeN metadata. Compare
+  // their numeric release version while retaining the installed label for UI.
+  // Published feed versions still go through the strict numeric validator.
+  if (target_ == "ubuntu24-amd64")
+    comparisonCurrent_.remove(QRegularExpression(QStringLiteral("\\+(?:main|gnome)[0-9]+$")));
+}
 QString UpdateChecker::feedUrl() { return QString::fromLatin1(kOrigin) + QStringLiteral("/updates/v1/stable"); }
 bool UpdateChecker::automatic() const { settings_.sync(); return settings_.value("automatic", true).toBool(); }
 void UpdateChecker::setAutomatic(bool enabled) {
@@ -85,8 +92,11 @@ void UpdateChecker::check(bool manual) {
   if (checking_) return;
   settings_.sync();
   bool valid = false;
-  compareVersions(current_, "0", &valid);
-  if (target_.isEmpty() || !valid) { emit finished("当前安装无法确定更新通道或版本，请从官网下载完整安装包。", manual); return; }
+  compareVersions(comparisonCurrent_, "0", &valid);
+  if (target_.isEmpty() || !valid) {
+    emit finished(QStringLiteral("无法识别当前安装的更新通道或版本，本次未完成更新检查。\n当前版本：%1").arg(current_), manual);
+    return;
+  }
   const auto now = QDateTime::currentSecsSinceEpoch();
   const auto key = target_ + "/";
   if (!manual && (!automatic() || now - settings_.value(key + "lastSuccess", 0).toLongLong() < 3600 ||
@@ -113,7 +123,10 @@ void UpdateChecker::check(bool manual) {
     if (!error.isEmpty()) { emit finished(error, manual); return; }
     settings_.setValue(key + "lastSuccess", now); settings_.sync();
     const QString version = release.value("version").toString();
-    if (compareVersions(version, current_) <= 0) { emit finished("当前已是最新版本。", manual); return; }
+    if (compareVersions(version, comparisonCurrent_) <= 0) {
+      emit finished(QStringLiteral("当前已是最新版本，无需下载。\n\n当前版本：%1\n官网最新版本：%2").arg(current_, version), manual);
+      return;
+    }
     if (!manual && version == settings_.value(key + "skipped").toString()) return;
     emit available(version, QUrl(release.value("downloadUrl").toString()), release.value("notes").toString().left(4000), manual);
   });

@@ -609,8 +609,9 @@ AboutPage::AboutPage(QWidget* parent)
       QMessageBox box(this);
       box.setWindowTitle(QStringLiteral("蚌壳拼音有新版本"));
       box.setTextFormat(Qt::PlainText);
-      box.setText(QStringLiteral("版本 %1 已发布。\n\n%2\n\n下载后使用系统安装工具更新，用户配置会保留。").arg(latest, notes));
-      auto* download = box.addButton(QStringLiteral("前往下载"), QMessageBox::AcceptRole);
+      box.setText(QStringLiteral("发现新版本。\n\n当前版本：%1\n最新版本：%2\n\n%3\n\n下载后使用系统安装工具更新，用户配置会保留。")
+                      .arg(updates->currentVersion(), latest, notes));
+      auto* download = box.addButton(QStringLiteral("下载最新安装包"), QMessageBox::AcceptRole);
       auto* skip = box.addButton(QStringLiteral("跳过此版本"), QMessageBox::DestructiveRole);
       box.addButton(QStringLiteral("稍后提醒"), QMessageBox::RejectRole);
       box.exec();
