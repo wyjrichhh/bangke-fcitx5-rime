@@ -24,6 +24,7 @@ bus = dbus.SessionBus()
 controller = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/controller'),
                             'org.fcitx.Fcitx.Controller1')
 previous = str(controller.CurrentInputMethod())
+previous_cursor = json.loads(subprocess.check_output(['hyprctl','-j','cursorpos'],text=True))
 panel = dbus.Interface(bus.get_object('org.bangke.Panel', '/org/bangke/Panel'), 'org.bangke.Panel1')
 window = Gtk.Window(title='Bangke UI isolation probe')
 window.set_default_size(640, 120)
@@ -56,6 +57,9 @@ try:
     clients = json.loads(subprocess.check_output(['hyprctl', '-j', 'clients'], text=True))
     own = [c for c in clients if c.get('title') == 'Bangke UI isolation probe']
     assert len(own) == 1 and not own[0]['xwayland'], own
+    x=own[0]['at'][0]+own[0]['size'][0]//2
+    y=own[0]['at'][1]+own[0]['size'][1]//2
+    subprocess.run(['hyprctl','dispatch',f'hl.dsp.cursor.move({{x={x},y={y}}})'],check=True,stdout=subprocess.DEVNULL)
     focus = "hl.dsp.focus({window="+json.dumps('address:'+own[0]['address'])+"})"
     subprocess.run(['hyprctl', 'dispatch', focus], check=True, stdout=subprocess.DEVNULL)
     pump(1)
@@ -89,3 +93,5 @@ finally:
     if previous: controller.SetCurrentIM(previous)
     window.destroy()
     pump()
+    x,y=previous_cursor['x'],previous_cursor['y']
+    subprocess.run(['hyprctl','dispatch',f'hl.dsp.cursor.move({{x={x},y={y}}})'],check=True,stdout=subprocess.DEVNULL)
