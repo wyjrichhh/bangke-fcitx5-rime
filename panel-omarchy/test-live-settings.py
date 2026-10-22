@@ -1,7 +1,7 @@
 import os,subprocess,tempfile,pathlib,time,json,dbus
 SOURCE = pathlib.Path(__file__).resolve().parents[1]
 root=pathlib.Path(tempfile.mkdtemp(prefix='bk-live-settings-'))
-env=dict(os.environ,PATH=str(SOURCE/'config-ui/build')+':'+os.environ['PATH'],XDG_STATE_HOME=str(root/'state'),BANGKE_PANEL_BACKEND='kimpanel',HOME=str(root),XDG_DATA_HOME=str(root/'data'),XDG_CONFIG_HOME=str(root/'config'),DISPLAY=os.environ.get('BANGKE_TEST_DISPLAY',':97'),GDK_BACKEND='x11',QT_QPA_PLATFORM='offscreen',BK_OMARCHY_THEME_DIR=str(SOURCE / 'config-ui/tests/fixtures/omarchy-tokyo-night'),MOCK_READY=str(root/'ready'),LAYOUT_LOG=str(root/'layout.log'))
+env=dict(os.environ,GIO_USE_VFS='local',PATH=str(SOURCE/'config-ui/build')+':'+os.environ['PATH'],XDG_STATE_HOME=str(root/'state'),BANGKE_PANEL_BACKEND='kimpanel',HOME=str(root),XDG_DATA_HOME=str(root/'data'),XDG_CONFIG_HOME=str(root/'config'),DISPLAY=os.environ.get('BANGKE_TEST_DISPLAY',':97'),GDK_BACKEND='x11',QT_QPA_PLATFORM='offscreen',BK_OMARCHY_THEME_DIR=str(SOURCE / 'config-ui/tests/fixtures/omarchy-tokyo-night'),MOCK_READY=str(root/'ready'),LAYOUT_LOG=str(root/'layout.log'))
 rime=root/'data/fcitx5/bangke';rime.mkdir(parents=True)
 (rime/'bangke.yaml').write_text((SOURCE/'data/bangke.yaml').read_text())
 mock=pathlib.Path(str(SOURCE / 'config-ui/tests/custompanel-mock.py')).read_text().replace("('org.bangke.Panel', 'org.fcitx.Fcitx5')","('org.fcitx.Fcitx5',)").replace("Panel(bus, '/org/bangke/Panel'), ","")
@@ -34,16 +34,15 @@ try:
   got['style'].update(candidate_list_layout=mode,font_point='24',alpha='.65',hilited_corner_radius='10',line_spacing='14',spacing='12',show_paging='true',inline_preedit='false',candidate_format='[candidate] / [label]: [comment]')
   assert str(panel.SetAppearance(json.dumps(got)))=='applied:1'
   signal('UpdatePreeditText',['bang ke','',0,True],'ssib');signal('ShowPreedit',[True],'b');signal('ShowLookupTable',[True],'b')
-  details=dbus.lowlevel.SignalMessage('/bangke','org.bangke.Candidate1','Candidates')
-  details.append(['蚌壳 bang ke','半个','新的很长候选'],['蚌壳','半个','新的很长候选'],['bang ke','',''],signature='asasas');bus.send_message(details);bus.flush()
+  backend=dbus.Interface(bus.get_object('org.fcitx.Fcitx5','/bangke'),'org.bangke.PanelTest1')
+  backend.EmitCandidates(['蚌壳 bang ke','半个','新的很长候选'],['蚌壳','半个','新的很长候选'],['bang ke','',''])
   assert panel.UpdateLookupTableFast(['1','2','3'],['蚌壳 bang ke','半个','新的很长候选'],['','',''],True,True,0,0)
   time.sleep(.25)
   assert json.loads(str(panel.GetAppearance()))['style']==got['style']
   state=json.loads(str(panel.GetPanelState()));assert state['im']=='蚌壳拼音' and state['visible'] and state['style']['font_point']=='24' and state['preedit_height']>0 and state['paging_height']==24 and state['comments']==1,state
   # Real GTK frame sequence: AI-only update changes width and reported caret.
   def composition(token,active):
-   msg=dbus.lowlevel.SignalMessage('/bangke','org.bangke.Candidate1','Composition')
-   msg.append(token,active,signature='sb');bus.send_message(msg);bus.flush()
+   backend.EmitComposition(token,active)
   composition('session:'+mode,True)
   panel.SetSpotRect(900,700,2,24)
   panel.UpdateLookupTableFast(['1','2','3'],['蚌壳','半个','帮客'],['','',''],False,False,0,0);time.sleep(.15)

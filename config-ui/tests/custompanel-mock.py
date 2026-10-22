@@ -30,6 +30,15 @@ class Controller(dbus.service.Object):
     @dbus.service.method('org.fcitx.Fcitx.Controller1', in_signature='', out_signature='')
     def ReloadConfig(self): pass
 class Rime(dbus.service.Object):
+    @dbus.service.signal('org.bangke.Candidate1', signature='asasas')
+    def Candidates(self, combined, texts, comments): pass
+    @dbus.service.signal('org.bangke.Candidate1', signature='sb')
+    def Composition(self, token, active): pass
+    @dbus.service.method('org.bangke.PanelTest1', in_signature='asasas', out_signature='')
+    def EmitCandidates(self, combined, texts, comments): self.Candidates(combined, texts, comments)
+    @dbus.service.method('org.bangke.PanelTest1', in_signature='sb', out_signature='')
+    def EmitComposition(self, token, active): self.Composition(token, active)
+
     @dbus.service.method('org.fcitx.Fcitx.Bangke1', in_signature='', out_signature='')
     def Deploy(self): pass
 objects = [Panel(bus, '/org/bangke/Panel'), Controller(bus, '/controller'), Rime(bus, '/bangke')]
