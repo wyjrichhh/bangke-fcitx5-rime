@@ -6,6 +6,7 @@
 #include "rimestate.h"
 #include <fcitx-utils/capabilityflags.h>
 #include <fcitx/inputcontext.h>
+#include <fcitx/inputcontextmanager.h>
 #include <fcitx/userinterface.h>
 #include <fcitx/userinterfacemanager.h>
 
@@ -41,11 +42,37 @@ RimePanel::RimePanel(RimeEngine *engine) : engine_(engine) {
             if (updateEvent.component() != UserInterfaceComponent::InputPanel)
                 return;
             auto *ic = updateEvent.inputContext();
-            if (!usesPrivatePanel(ic))
+            auto &input = ic->inputPanel();
+            const auto *ours =
+                input.customInputPanelCallback().target<Callback>();
+            if (!usesPrivatePanel(ic)) {
+                if (ours && ours->panel == this) {
+                    input.setCustomInputPanelCallback({});
+                    hide();
+                }
                 return;
-            ic->inputPanel().setCustomInputPanelCallback(
-                [this](InputContext *context) { update(context); });
+            }
+            // Temporary modes may install their own custom panel. Preserve it.
+            if (input.customInputPanelCallback() && !ours) {
+                hide();
+                return;
+            }
+            input.setCustomInputPanelCallback(Callback{this});
         });
+}
+RimePanel::~RimePanel() {
+    updateHandler_.reset();
+    service_.reset();
+    engine_->instance()->inputContextManager().foreach(
+        [this](InputContext *ic) {
+            auto &input = ic->inputPanel();
+            const auto *callback =
+                input.customInputPanelCallback().target<Callback>();
+            if (callback && callback->panel == this)
+                input.setCustomInputPanelCallback({});
+            return true;
+        });
+    hide();
 }
 InputContext *RimePanel::currentContext() {
     auto *ic = engine_->instance()->mostRecentInputContext();

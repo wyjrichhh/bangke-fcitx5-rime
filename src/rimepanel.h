@@ -12,6 +12,7 @@ class RimeEngine;
 class RimePanel : public dbus::ObjectVTable<RimePanel> {
 public:
     explicit RimePanel(RimeEngine *engine);
+    ~RimePanel();
     void activate(InputContext *ic);
     void hide();
     void selectCandidate(int32_t index);
@@ -19,6 +20,10 @@ public:
     void refresh();
 
 private:
+    struct Callback {
+        RimePanel *panel;
+        void operator()(InputContext *ic) const { panel->update(ic); }
+    };
     InputContext *currentContext();
     bool usesPrivatePanel(InputContext *ic);
     void update(InputContext *ic);
