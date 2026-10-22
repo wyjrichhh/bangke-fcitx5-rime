@@ -2,7 +2,7 @@
 Type=Application
 Name=蚌壳拼音
 Comment=配置蚌壳拼音输入法（含 AI 预测）
-Exec=fcitx5-rime-config
-Icon=fcitx-rime
+Exec=bangke-pinyin-config
+Icon=fcitx-bangke
 Categories=System;Qt;Utility;
 Terminal=false

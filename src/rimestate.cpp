@@ -287,7 +287,7 @@ void RimeState::updateUI(InputContext *ic, bool keyRelease,
         // the same origin, while a rapid commit/new input must get a new one.
         if (auto *dbus = engine_->dbus()) {
             auto message = dbus->call<IDBusModule::bus>()->createSignal(
-                "/rime", "org.bangke.Candidate1", "Composition");
+                "/bangke", "org.bangke.Candidate1", "Composition");
             message << (std::to_string(session_) + ":" + std::to_string(compositionSerial_)) << active;
             message.send();
         }

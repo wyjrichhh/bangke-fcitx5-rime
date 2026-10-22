@@ -30,8 +30,8 @@ class Controller(dbus.service.Object):
     @dbus.service.method('org.fcitx.Fcitx.Controller1', in_signature='', out_signature='')
     def ReloadConfig(self): pass
 class Rime(dbus.service.Object):
-    @dbus.service.method('org.fcitx.Fcitx.Rime1', in_signature='', out_signature='')
+    @dbus.service.method('org.fcitx.Fcitx.Bangke1', in_signature='', out_signature='')
     def Deploy(self): pass
-objects = [Panel(bus, '/org/kde/impanel'), Controller(bus, '/controller'), Rime(bus, '/rime')]
+objects = [Panel(bus, '/org/kde/impanel'), Controller(bus, '/controller'), Rime(bus, '/bangke')]
 open(os.environ['MOCK_READY'], 'w').close()
 GLib.MainLoop().run()

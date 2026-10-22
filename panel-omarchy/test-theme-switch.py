@@ -2,7 +2,7 @@ import os,subprocess,tempfile,pathlib,time,json,dbus
 SOURCE = pathlib.Path(__file__).resolve().parents[1]
 root=pathlib.Path(tempfile.mkdtemp(prefix='bk-live-settings-'))
 env=dict(os.environ,HOME=str(root),XDG_DATA_HOME=str(root/'data'),XDG_CONFIG_HOME=str(root/'config'),DISPLAY=':97',GDK_BACKEND='x11',QT_QPA_PLATFORM='offscreen',XDG_STATE_HOME=str(root/'state'),BANGKE_PANEL_BACKEND='kimpanel',BK_OMARCHY_CATALOG_DIR=str(SOURCE / 'panel-omarchy/themes'),PATH=str(SOURCE/'config-ui/build')+':'+os.environ['PATH'],MOCK_READY=str(root/'ready'),LAYOUT_LOG=str(root/'layout.log'))
-rime=root/'data/fcitx5/rime';rime.mkdir(parents=True)
+rime=root/'data/fcitx5/bangke';rime.mkdir(parents=True)
 (rime/'bangke.yaml').write_text((SOURCE/'data/bangke.yaml').read_text())
 mock=pathlib.Path(str(SOURCE / 'config-ui/tests/custompanel-mock.py')).read_text().replace("('org.kde.impanel', 'org.fcitx.Fcitx5')","('org.fcitx.Fcitx5',)").replace("Panel(bus, '/org/kde/impanel'), ","")
 (root/'controller.py').write_text(mock)
@@ -31,7 +31,7 @@ try:
    time.sleep(.1)
   raise AssertionError((expected,got,(root/'panel.log').read_text()))
  def dump():
-  return json.loads(subprocess.check_output(['fcitx5-rime-config','--dump-panel-appearance'],env=env,text=True))
+  return json.loads(subprocess.check_output(['bangke-pinyin-config','--dump-panel-appearance'],env=env,text=True))
  wait_palette(dump())
  # Exercise every shipped theme using actual Gio events and actual Qt resolver.
  for theme in sorted(path for path in catalog.iterdir() if path.is_dir()):

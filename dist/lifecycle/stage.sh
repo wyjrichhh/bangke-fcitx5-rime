@@ -21,7 +21,7 @@ Description=Bangke software update notifications
 PartOf=graphical-session.target
 After=graphical-session.target
 [Service]
-ExecStart=/usr/bin/fcitx5-rime-config --update-monitor
+ExecStart=/usr/bin/bangke-pinyin-config --update-monitor
 Restart=on-failure
 RestartSec=60
 EOF

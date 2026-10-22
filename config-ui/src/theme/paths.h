@@ -19,7 +19,7 @@ QString stateDir();  // <stateHome>/bangke-pinyin
 QString omarchyThemeDir();  // <stateHome>/omarchy/current/theme
 
 // 设置数据与配色都在 rime 用户配置里（与 mac/Windows 同构）。
-QString rimeUserDir();       // <dataHome>/fcitx5/rime
+QString rimeUserDir();       // <dataHome>/fcitx5/bangke
 QString sharedBangkeYaml();  // 出厂值：用户目录里的 bangke.yaml（由 seed 铺开）
 QString customBangkeYaml();  // 用户改动：bangke.custom.yaml
 

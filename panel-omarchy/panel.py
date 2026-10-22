@@ -654,7 +654,7 @@ def panel_preferences():
         pass
     data_home = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
     try:
-        saved = (data_home / "fcitx5/rime/bangke.custom.yaml").read_text()
+        saved = (data_home / "fcitx5/bangke/bangke.custom.yaml").read_text()
         orientation = re.search(r"(?m)^\s*style/text_orientation:\s*['\"]?(horizontal|vertical)", saved)
         if orientation:
             vertical = orientation[1] == "vertical"
@@ -799,7 +799,7 @@ class Panel(Gtk.Window):
         generation = self._theme_generation
         def worker():
             try:
-                result = subprocess.run(["fcitx5-rime-config","--dump-panel-appearance"],capture_output=True,text=True,timeout=8)
+                result = subprocess.run(["bangke-pinyin-config","--dump-panel-appearance"],capture_output=True,text=True,timeout=8)
                 if result.returncode: raise ValueError(result.stderr.strip())
                 data = validate_appearance(result.stdout)
                 def apply():

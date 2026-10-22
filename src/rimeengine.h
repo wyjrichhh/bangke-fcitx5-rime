@@ -168,7 +168,7 @@ private:
 class RimeEngineFactory : public AddonFactory {
 public:
     AddonInstance *create(AddonManager *manager) override {
-        registerDomain("fcitx5-rime", FCITX_INSTALL_LOCALEDIR);
+        registerDomain("fcitx5-bangke", FCITX_INSTALL_LOCALEDIR);
         return new RimeEngine(manager->instance());
     }
 };

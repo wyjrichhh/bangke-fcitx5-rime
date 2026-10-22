@@ -11,8 +11,16 @@ set(RIME_SOURCES
 set(RIME_ADDON_NAME rime-ai)
 
 add_library(${RIME_ADDON_NAME} MODULE ${RIME_SOURCES})
-target_link_libraries(${RIME_ADDON_NAME} Fcitx5::Core Fcitx5::Config PkgConfig::Rime Fcitx5::Module::Notifications Fcitx5::Module::DBus)
-set_target_properties(${RIME_ADDON_NAME} PROPERTIES PREFIX "")
+target_link_libraries(${RIME_ADDON_NAME} Fcitx5::Core Fcitx5::Config Fcitx5::Module::Notifications Fcitx5::Module::DBus)
+if(BANGKE_ISOLATED_RUNTIME)
+  target_include_directories(${RIME_ADDON_NAME} PRIVATE ${Rime_INCLUDE_DIRS})
+  target_link_libraries(${RIME_ADDON_NAME} ${BANGKE_RIME_LIBRARY})
+  target_compile_definitions(${RIME_ADDON_NAME} PRIVATE rime_get_api=bangke_rime_get_api)
+  set_target_properties(${RIME_ADDON_NAME} PROPERTIES INSTALL_RPATH "/usr/lib/fcitx5-rime-ai")
+else()
+  target_link_libraries(${RIME_ADDON_NAME} PkgConfig::Rime)
+endif()
+set_target_properties(${RIME_ADDON_NAME} PROPERTIES PREFIX "" CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 # 代码里要按自己的 addon 名去 input method 表里找注册条目（见 rimeengine.cpp 的
 # displayName）；5.0.x 的 fcitx5 还没有 AddonInstance::addonInfo()，只能这样带进去。
 target_compile_definitions(${RIME_ADDON_NAME} PRIVATE FCITX_RIME_ADDON_NAME="${RIME_ADDON_NAME}")

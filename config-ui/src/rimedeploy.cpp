@@ -40,11 +40,11 @@ QString RimeDeploy::setAddonConfig(const QString& addon, const QVariantMap& valu
   return QString();
 }
 
-// rime addon 通过自己的 DBus 接口 org.fcitx.Fcitx.Rime1（/rime）暴露 Deploy 方法，
+// rime addon 通过自己的 DBus 接口 org.fcitx.Fcitx.Bangke1（/rime）暴露 Deploy 方法，
 // 直接调 RimeEngine::deploy() 做 fullcheck 重建（rimeservice.cpp）。失败时兜底提示。
 QString RimeDeploy::triggerDeploy() {
-  QDBusInterface iface(QStringLiteral("org.fcitx.Fcitx5"), QStringLiteral("/rime"),
-                       QStringLiteral("org.fcitx.Fcitx.Rime1"),
+  QDBusInterface iface(QStringLiteral("org.fcitx.Fcitx5"), QStringLiteral("/bangke"),
+                       QStringLiteral("org.fcitx.Fcitx.Bangke1"),
                        QDBusConnection::sessionBus());
   if (!iface.isValid()) {
     return QStringLiteral("未检测到运行中的 fcitx5，请启动输入法后重试，或切换输入法使配置生效。");

@@ -26,7 +26,7 @@
 #include "ui/preview.h"
 
 namespace {
-constexpr const char* kInstanceKey = "fcitx5-rime-config-instance";
+constexpr const char* kInstanceKey = "bangke-pinyin-config-instance";
 
 QTextStream& out() {
   static QTextStream stream(stdout);
@@ -172,7 +172,7 @@ int main(int argc, char* argv[]) {
   }
 
   QApplication app(argc, argv);
-  app.setApplicationName(QStringLiteral("fcitx5-rime-config"));
+  app.setApplicationName(QStringLiteral("bangke-pinyin-config"));
   if (!headless) RimeDeploy::ensurePanel();
   if (!headless && RimeDeploy::usesCustomPanel() &&
       qEnvironmentVariableIsEmpty("BANGKE_PANEL_BACKEND")) {

@@ -303,7 +303,7 @@ QString schemaFilePath(const QString& dir, const QString& name) {
 QString YamlConfig::rimeUserDir() {
   QString dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
   if (dataHome.isEmpty()) dataHome = QDir::homePath() + "/.local/share";
-  return dataHome + "/fcitx5/rime";
+  return dataHome + "/fcitx5/bangke";
 }
 
 QString YamlConfig::brandName() {

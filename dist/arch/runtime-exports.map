@@ -1,0 +1,4 @@
+{
+  global: bangke_rime_get_api;
+  local: *;
+};

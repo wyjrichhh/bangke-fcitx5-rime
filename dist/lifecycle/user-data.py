@@ -80,27 +80,16 @@ def main():
     data = pathlib.Path(os.environ.get('XDG_DATA_HOME', home / '.local/share'))
     path = config / 'fcitx5/profile'
     before = path.read_text() if path.exists() else ''
-    legacy = data / 'bangke-pinyin/legacy-migrated'
-    old_addon_gone = not pathlib.Path('/usr/share/fcitx5/inputmethod/rime.conf').exists()
-    if args.action == 'install' and (old_addon_gone or pathlib.Path('/var/lib/bangke-pinyin/migrate-rime').exists()) and not legacy.exists():
-        # Migrate a replaced addon, or a legacy addon proven Bangke-branded by pre-upgrade.
-        before_migration = before
-        if re.search(r'(?m)^Name=rime-ai$', before):
-            before = re.sub(r'(?m)^DefaultIM=rime$', 'DefaultIM=rime-ai', before)
-            before = profile(before, remove=True, target_name='rime')
-        else:
-            before = re.sub(r'(?m)^(Name|DefaultIM)=rime$', r'\1=rime-ai', before)
-        if before != before_migration:
-            shutil.copyfile(path, path.with_suffix('.bangke-legacy-backup'))
-            atomic(path, before)
-        legacy.parent.mkdir(parents=True, exist_ok=True)
-        legacy.touch()
     after = profile(before, args.action == 'remove')
     if before != after:
         if path.exists(): shutil.copyfile(path, path.with_suffix('.bangke-backup'))
         atomic(path, after)
     if args.action == 'install':
-        synchronize(args.seed, data / 'fcitx5/rime', data / 'bangke-pinyin/seed-manifest.json')
+        destination = data / 'fcitx5/bangke'
+        legacy = data / 'fcitx5/rime'
+        if not destination.exists() and (legacy / 'bangke.yaml').is_file():
+            shutil.copytree(legacy, destination, ignore=shutil.ignore_patterns('build'))
+        synchronize(args.seed, destination, data / 'bangke-pinyin/seed-manifest.json')
     if args.ubuntu:
         selection = data / 'bangke-pinyin/input-framework.json'
         xinput = home / '.xinputrc'

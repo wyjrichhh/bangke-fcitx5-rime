@@ -46,7 +46,7 @@ enable) touch "$HOME/enabled" ;;
 disable) rm -f "$HOME/enabled" ;;
 esac
 ''')
-    command('fcitx5-rime-config', '''echo '{"version":1,"style":{}}'
+    command('bangke-pinyin-config', '''echo '{"version":1,"style":{}}'
 ''')
     env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
            'XDG_DATA_HOME': str(home / '.local/share'), 'PATH': f'{bin_dir}:{os.environ["PATH"]}',
