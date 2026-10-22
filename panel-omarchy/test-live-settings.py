@@ -22,6 +22,11 @@ try:
   panel.get_dbus_method(name)(*args)
 
  signal('RegisterProperties',[['/Fcitx/im:蚌壳拼音:input-keyboard:Bangke:0:0']],'as')
+ conf=root/'config/fcitx5/conf/classicui.conf';conf.parent.mkdir(parents=True,exist_ok=True)
+ conf.write_text('Theme=original-user-skin\nFont=Original Font 13\n')
+ before=conf.read_bytes()
+ subprocess.run([str(SOURCE/'config-ui/build/bangke-pinyin-config'),'--generate-theme'],env=env,check=True)
+ assert conf.read_bytes()==before,'Theme generation modified the original skin'
  # Xvfb cannot supply Hyprland backdrop effects; exercise every other setting.
  subprocess.run([str(SOURCE / 'config-ui/build/custompanel_save_test'), '--without-blur'],env=env,check=True)
  got=json.loads(str(panel.GetAppearance()));assert got['style']['candidate_list_layout']=='linear'

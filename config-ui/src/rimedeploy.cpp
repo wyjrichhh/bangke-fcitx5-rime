@@ -93,7 +93,9 @@ QString RimeDeploy::addonConfigDump(const QString& addon, const QStringList& key
 
 namespace {
 QDBusMessage panelCall(const QString& method, const QVariantList& args = {}) {
-  const bool privatePanel = QDBusConnection::sessionBus().interface()->isServiceRegistered(QStringLiteral("org.bangke.Panel"));
+  const bool privatePanel = QFileInfo::exists(QStringLiteral("/usr/share/bangke-pinyin/omarchy")) ||
+      qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel" ||
+      QDBusConnection::sessionBus().interface()->isServiceRegistered(QStringLiteral("org.bangke.Panel"));
   auto message = QDBusMessage::createMethodCall(
       privatePanel ? QStringLiteral("org.bangke.Panel") : QStringLiteral("org.kde.impanel"), privatePanel ? QStringLiteral("/org/bangke/Panel") : QStringLiteral("/org/kde/impanel"),
       privatePanel ? QStringLiteral("org.bangke.Panel1") : QStringLiteral("org.kde.impanel2"), method);
@@ -117,7 +119,8 @@ void RimeDeploy::ensurePanel() {
 }
 
 bool RimeDeploy::usesCustomPanel() {
-  if (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel") return true;
+  if (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel" ||
+      QFileInfo::exists(QStringLiteral("/usr/share/bangke-pinyin/omarchy"))) return true;
   const auto reply = panelCall(QStringLiteral("GetPanelIdentity"));
   if (reply.type() == QDBusMessage::ReplyMessage)
     return reply.arguments().value(0).toString().startsWith(QStringLiteral("bangke-panel:"));

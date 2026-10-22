@@ -14,7 +14,7 @@ addon 使用 `rime-ai` 注册名，避免覆盖发行版 `rime` addon 的模块�
 
 ### Omarchy 独立面板
 
-`panel-omarchy/` 使用 GTK3 / Pango / Cairo 和 layer-shell 绘制独立候选窗口，经标准 Kimpanel D-Bus 接收候选、翻页和点击操作，通过蚌壳专用信号传递独立注释与组合输入生命周期。
+`panel-omarchy/` 使用 GTK3 / Pango / Cairo 和 layer-shell 绘制独立候选窗口，经蚌壳专属 D-Bus 通道接收候选、翻页和点击操作，通过蚌壳专用信号传递独立注释与组合输入生命周期。
 
 组合期间固定面板原点，AI 更新不反复移动窗口；长候选按完整文本换行、滚动。背景透明度与文字绘制分开处理。Hyprland 插件读取真实输入光标位置，控制模糊与窗口动画，并在加载前检查 ABI。独立托盘组件保留设置及菜单入口。
 

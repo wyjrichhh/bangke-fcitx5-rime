@@ -48,7 +48,8 @@ int runGenerateTheme(const QString& outRoot) {
       bangke::paths::sharedBangkeYaml(), bangke::paths::customBangkeYaml(),
       bangke::appPlatformTheme());
   const bangke::ThemeResult result =
-      bangke::applyTheme(config, config.style(), outRoot.isEmpty(), outRoot);
+      bangke::applyTheme(config, config.style(),
+                         outRoot.isEmpty() && !RimeDeploy::usesCustomPanel(), outRoot);
   if (!result.ok) {
     out() << result.message << Qt::endl;
     return 1;
