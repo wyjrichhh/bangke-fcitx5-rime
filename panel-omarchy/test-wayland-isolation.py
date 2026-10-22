@@ -59,7 +59,10 @@ try:
     focus = "hl.dsp.focus({window="+json.dumps('address:'+own[0]['address'])+"})"
     subprocess.run(['hyprctl', 'dispatch', focus], check=True, stdout=subprocess.DEVNULL)
     pump(1)
-    assert window.is_active() and entry.has_focus(), 'Probe window did not receive keyboard focus'
+    entry.grab_focus()
+    pump(.5)
+    active=json.loads(subprocess.check_output(['hyprctl','-j','activewindow'],text=True))
+    assert window.is_active() and entry.has_focus(), (window.is_active(),entry.has_focus(),entry.is_focus(),active)
     for name in ('rime', 'rime-ai', 'rime'):
         entry.set_text('')
         entry.grab_focus()
