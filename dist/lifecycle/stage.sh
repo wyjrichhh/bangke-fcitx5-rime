@@ -26,8 +26,8 @@ Restart=on-failure
 RestartSec=60
 EOF
 touch "$ROOT/usr/share/bangke-pinyin/$PLATFORM"
-# Both custom panels use Fcitx's Kimpanel UI, which doesn't enable its tray.
-# Reuse the same tray/menu bridge on both desktops.
+# GNOME's legacy Kimpanel adapter needs a tray bridge. Omarchy retains its
+# original Fcitx UI and tray policy with the per-context private panel.
 if [[ $PLATFORM == ubuntu ]]; then
   bash "$REPO/panel-omarchy/tray/build.sh" "$ROOT"
 fi

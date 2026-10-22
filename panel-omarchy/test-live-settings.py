@@ -1,14 +1,15 @@
 import os,subprocess,tempfile,pathlib,time,json,dbus
 SOURCE = pathlib.Path(__file__).resolve().parents[1]
 root=pathlib.Path(tempfile.mkdtemp(prefix='bk-live-settings-'))
-env=dict(os.environ,PATH=str(SOURCE/'config-ui/build')+':'+os.environ['PATH'],XDG_STATE_HOME=str(root/'state'),BANGKE_PANEL_BACKEND='kimpanel',HOME=str(root),XDG_DATA_HOME=str(root/'data'),XDG_CONFIG_HOME=str(root/'config'),DISPLAY=':97',GDK_BACKEND='x11',QT_QPA_PLATFORM='offscreen',BK_OMARCHY_THEME_DIR=str(SOURCE / 'config-ui/tests/fixtures/omarchy-tokyo-night'),MOCK_READY=str(root/'ready'),LAYOUT_LOG=str(root/'layout.log'))
+env=dict(os.environ,PATH=str(SOURCE/'config-ui/build')+':'+os.environ['PATH'],XDG_STATE_HOME=str(root/'state'),BANGKE_PANEL_BACKEND='kimpanel',HOME=str(root),XDG_DATA_HOME=str(root/'data'),XDG_CONFIG_HOME=str(root/'config'),DISPLAY=os.environ.get('BANGKE_TEST_DISPLAY',':97'),GDK_BACKEND='x11',QT_QPA_PLATFORM='offscreen',BK_OMARCHY_THEME_DIR=str(SOURCE / 'config-ui/tests/fixtures/omarchy-tokyo-night'),MOCK_READY=str(root/'ready'),LAYOUT_LOG=str(root/'layout.log'))
 rime=root/'data/fcitx5/bangke';rime.mkdir(parents=True)
 (rime/'bangke.yaml').write_text((SOURCE/'data/bangke.yaml').read_text())
 mock=pathlib.Path(str(SOURCE / 'config-ui/tests/custompanel-mock.py')).read_text().replace("('org.bangke.Panel', 'org.fcitx.Fcitx5')","('org.fcitx.Fcitx5',)").replace("Panel(bus, '/org/bangke/Panel'), ","")
 (root/'controller.py').write_text(mock)
 procs=[]
 try:
- procs.append(subprocess.Popen(['Xvfb',':97','-screen','0','1600x1000x24'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL));time.sleep(.4)
+ if not os.environ.get('BANGKE_TEST_DISPLAY'):
+  procs.append(subprocess.Popen(['Xvfb',':97','-screen','0','1600x1000x24'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL));time.sleep(.4)
  for name,cmd in [('controller',['python',str(root/'controller.py')]),('panel',['python',str(SOURCE/'panel-omarchy/panel.py')])]:
   procs.append(subprocess.Popen(cmd,env=env,stdout=(root/(name+'.log')).open('w'),stderr=subprocess.STDOUT))
  bus=dbus.SessionBus()

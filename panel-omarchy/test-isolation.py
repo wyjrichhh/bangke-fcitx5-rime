@@ -5,7 +5,6 @@ Requires xwininfo and DISPLAY pointing at the session's XWayland server.
 The disposable D-Bus client uses that display so native classicui creates a
 real candidate window. It never enables client-side candidate rendering.
 """
-import hashlib
 import json
 import os
 from pathlib import Path
