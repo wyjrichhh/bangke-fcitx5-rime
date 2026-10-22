@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Check real GTK/Wayland typing through the compositor, not a mock context.
 
-Run inside Omarchy with GDK_BACKEND=wayland and GTK_IM_MODULE=wayland.
+Run inside Omarchy with GDK_BACKEND=wayland and GTK_IM_MODULE=fcitx.
+This covers the GTK Fcitx bridge in a native Wayland window. Synthetic
+shortcuts bypass compositor IM grabs, so they cannot test text-input-v3.
 Creates a disposable entry, sends keys only to its window, restores the IM,
 and optionally saves screenshots under BANGKE_TEST_CAPTURE_DIR.
 """
@@ -54,6 +56,10 @@ try:
     clients = json.loads(subprocess.check_output(['hyprctl', '-j', 'clients'], text=True))
     own = [c for c in clients if c.get('title') == 'Bangke UI isolation probe']
     assert len(own) == 1 and not own[0]['xwayland'], own
+    focus = "hl.dsp.focus({window="+json.dumps('address:'+own[0]['address'])+"})"
+    subprocess.run(['hyprctl', 'dispatch', focus], check=True, stdout=subprocess.DEVNULL)
+    pump(1)
+    assert window.is_active() and entry.has_focus(), 'Probe window did not receive keyboard focus'
     for name in ('rime', 'rime-ai', 'rime'):
         entry.set_text('')
         entry.grab_focus()
