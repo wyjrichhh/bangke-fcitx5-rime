@@ -57,7 +57,7 @@ try:
         assert str(controller.CurrentInputMethod()) == name, f"input method did not switch to {name}"
         service_path, service_interface = (("/bangke", "org.fcitx.Fcitx.Bangke1")
                                             if name == "rime-ai" else
-                                            ("/bangke", "org.fcitx.Fcitx.Bangke1"))
+                                            ("/rime", "org.fcitx.Fcitx.Rime1"))
         service = dbus.Interface(bus.get_object("org.fcitx.Fcitx5", service_path),
                                  service_interface)
         service.SetAsciiMode(False)

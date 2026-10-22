@@ -151,7 +151,7 @@ cd "$PRIV"
 rm -rf build
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
-  -DCMAKE_PREFIX_PATH="$PREFIX" -DBANGKE_ISOLATED_RUNTIME=ON \
+  -DCMAKE_PREFIX_PATH="$PREFIX" -DBANGKE_ISOLATED_RUNTIME=ON -DBANGKE_PRIVATE_PANEL=ON \
   -DRIME_DATA_DIR=/usr/share/bangke-pinyin/rime-data "${CMAKE_OLD_POLICY[@]}"
 ninja -C build -j "$JOBS"
 ADDON_DYNAMIC=$(readelf -d "$PRIV/build/src/rime-ai.so")

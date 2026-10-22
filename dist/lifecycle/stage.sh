@@ -28,7 +28,7 @@ EOF
 touch "$ROOT/usr/share/bangke-pinyin/$PLATFORM"
 # Both custom panels use Fcitx's Kimpanel UI, which doesn't enable its tray.
 # Reuse the same tray/menu bridge on both desktops.
-if [[ $PLATFORM == ubuntu || $PLATFORM == omarchy ]]; then
+if [[ $PLATFORM == ubuntu ]]; then
   bash "$REPO/panel-omarchy/tray/build.sh" "$ROOT"
 fi
 if [[ $PLATFORM == ubuntu ]]; then
@@ -79,10 +79,5 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/lib/bangke-pinyin/caret.sh
 ExecStop=/usr/lib/bangke-pinyin/caret.sh stop
-EOF
-  cat > "$ROOT/usr/share/bangke-pinyin/20-bangke-kimpanel.conf" <<'EOF'
-[Service]
-ExecStart=
-ExecStart=/usr/bin/fcitx5 --disable classicui --enable notificationitem,bangke-tray -u kimpanel
 EOF
 fi

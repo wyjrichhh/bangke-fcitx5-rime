@@ -3,6 +3,7 @@ set(RIME_SOURCES
     rimeengine.cpp
     rimecandidate.cpp
     rimeservice.cpp
+    rimepanel.cpp
 )
 # addon 名是 rime-ai 而不是 rime：上游 fcitx5-rime 在发行版里就叫 rime，
 # 同名会让两个包的 addon/rime.conf、inputmethod/rime.conf、rime.so 互相覆盖。
@@ -11,6 +12,9 @@ set(RIME_SOURCES
 set(RIME_ADDON_NAME rime-ai)
 
 add_library(${RIME_ADDON_NAME} MODULE ${RIME_SOURCES})
+if(BANGKE_PRIVATE_PANEL)
+  target_compile_definitions(${RIME_ADDON_NAME} PRIVATE BANGKE_PRIVATE_PANEL)
+endif()
 target_link_libraries(${RIME_ADDON_NAME} Fcitx5::Core Fcitx5::Config Fcitx5::Module::Notifications Fcitx5::Module::DBus)
 if(BANGKE_ISOLATED_RUNTIME)
   target_include_directories(${RIME_ADDON_NAME} PRIVATE ${Rime_INCLUDE_DIRS})

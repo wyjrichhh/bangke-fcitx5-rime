@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     if (!applied) return 17;
     QFile f(bangke::paths::classicUiConf());
     if (!f.open(QIODevice::ReadOnly) || f.readAll() != sentinel) return 6;
-    auto call = QDBusMessage::createMethodCall("org.kde.impanel", "/org/kde/impanel", "org.kde.impanel2", "GetAppearance");
+    auto call = QDBusMessage::createMethodCall("org.bangke.Panel", "/org/bangke/Panel", "org.bangke.Panel1", "GetAppearance");
     auto reply = QDBusConnection::sessionBus().call(call);
     auto style = QJsonDocument::fromJson(reply.arguments().value(0).toString().toUtf8()).object()["style"].toObject();
     const QMap<QString, double> expected{{"corner_radius",24},{"hilited_corner_radius",12},{"font_point",19},

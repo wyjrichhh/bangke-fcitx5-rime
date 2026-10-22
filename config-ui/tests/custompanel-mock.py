@@ -8,15 +8,15 @@ from gi.repository import GLib
 
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 bus = dbus.SessionBus()
-names = [dbus.service.BusName(n, bus) for n in ('org.kde.impanel', 'org.fcitx.Fcitx5')]
+names = [dbus.service.BusName(n, bus) for n in ('org.bangke.Panel', 'org.fcitx.Fcitx5')]
 class Panel(dbus.service.Object):
-    @dbus.service.method('org.kde.impanel2', in_signature='', out_signature='s')
+    @dbus.service.method('org.bangke.Panel1', in_signature='', out_signature='s')
     def GetPanelIdentity(self): return 'bangke-panel:test'
-    @dbus.service.method('org.kde.impanel2', in_signature='s', out_signature='s')
+    @dbus.service.method('org.bangke.Panel1', in_signature='s', out_signature='s')
     def SetLayout(self, orientation):
         with open(os.environ['LAYOUT_LOG'], 'a') as f: f.write(str(orientation)+'\n')
         return orientation
-    @dbus.service.method('org.kde.impanel2', in_signature='s', out_signature='s')
+    @dbus.service.method('org.bangke.Panel1', in_signature='s', out_signature='s')
     def SetAppearance(self, raw):
         data=json.loads(str(raw))
         assert data['version']==1
@@ -32,6 +32,6 @@ class Controller(dbus.service.Object):
 class Rime(dbus.service.Object):
     @dbus.service.method('org.fcitx.Fcitx.Bangke1', in_signature='', out_signature='')
     def Deploy(self): pass
-objects = [Panel(bus, '/org/kde/impanel'), Controller(bus, '/controller'), Rime(bus, '/bangke')]
+objects = [Panel(bus, '/org/bangke/Panel'), Controller(bus, '/controller'), Rime(bus, '/bangke')]
 open(os.environ['MOCK_READY'], 'w').close()
 GLib.MainLoop().run()

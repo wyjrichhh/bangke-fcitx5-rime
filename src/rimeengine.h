@@ -7,6 +7,7 @@
 #define _FCITX_RIMEENGINE_H_
 
 #include "rimeservice.h"
+#include "rimepanel.h"
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/iniparser.h>
 #include <fcitx-utils/event.h>
@@ -163,6 +164,7 @@ private:
     uint64_t aiPumpDeadline_ = 0;
 
     RimeService service_{this};
+    RimePanel panel_{this};
 };
 
 class RimeEngineFactory : public AddonFactory {

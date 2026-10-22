@@ -5,6 +5,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
 #include <QDBusError>
 #include <QDBusInterface>
 #include <QDBusMessage>
@@ -92,9 +93,10 @@ QString RimeDeploy::addonConfigDump(const QString& addon, const QStringList& key
 
 namespace {
 QDBusMessage panelCall(const QString& method, const QVariantList& args = {}) {
+  const bool privatePanel = QDBusConnection::sessionBus().interface()->isServiceRegistered(QStringLiteral("org.bangke.Panel"));
   auto message = QDBusMessage::createMethodCall(
-      QStringLiteral("org.kde.impanel"), QStringLiteral("/org/kde/impanel"),
-      QStringLiteral("org.kde.impanel2"), method);
+      privatePanel ? QStringLiteral("org.bangke.Panel") : QStringLiteral("org.kde.impanel"), privatePanel ? QStringLiteral("/org/bangke/Panel") : QStringLiteral("/org/kde/impanel"),
+      privatePanel ? QStringLiteral("org.bangke.Panel1") : QStringLiteral("org.kde.impanel2"), method);
   message.setArguments(args);
   return QDBusConnection::sessionBus().call(message, QDBus::Block, 2000);
 }

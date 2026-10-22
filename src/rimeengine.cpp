@@ -304,6 +304,7 @@ void RimeEngine::updateConfig() {
 void RimeEngine::activate(const InputMethodEntry &entry,
                            InputContextEvent &event) {
     // 菜单文字跟 IM 注册名走（inputmethod/rime-ai.conf 的 Name=），改名不必动这里。
+    panel_.activate(event.inputContext());
     configAction_.setShortText(entry.name() + " 设置");
     event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
                                                  imAction_.get());
@@ -323,6 +324,8 @@ void RimeEngine::deactivate(const InputMethodEntry &entry,
         state->commitPreedit(inputContext);
     }
     reset(entry, event);
+    panel_.hide();
+    event.inputContext()->inputPanel().setCustomInputPanelCallback({});
 }
 void RimeEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
     FCITX_UNUSED(entry);

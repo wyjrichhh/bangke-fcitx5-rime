@@ -4,7 +4,7 @@ root=pathlib.Path(tempfile.mkdtemp(prefix='bk-live-settings-'))
 env=dict(os.environ,HOME=str(root),XDG_DATA_HOME=str(root/'data'),XDG_CONFIG_HOME=str(root/'config'),DISPLAY=':97',GDK_BACKEND='x11',QT_QPA_PLATFORM='offscreen',XDG_STATE_HOME=str(root/'state'),BANGKE_PANEL_BACKEND='kimpanel',BK_OMARCHY_CATALOG_DIR=str(SOURCE / 'panel-omarchy/themes'),PATH=str(SOURCE/'config-ui/build')+':'+os.environ['PATH'],MOCK_READY=str(root/'ready'),LAYOUT_LOG=str(root/'layout.log'))
 rime=root/'data/fcitx5/bangke';rime.mkdir(parents=True)
 (rime/'bangke.yaml').write_text((SOURCE/'data/bangke.yaml').read_text())
-mock=pathlib.Path(str(SOURCE / 'config-ui/tests/custompanel-mock.py')).read_text().replace("('org.kde.impanel', 'org.fcitx.Fcitx5')","('org.fcitx.Fcitx5',)").replace("Panel(bus, '/org/kde/impanel'), ","")
+mock=pathlib.Path(str(SOURCE / 'config-ui/tests/custompanel-mock.py')).read_text().replace("('org.bangke.Panel', 'org.fcitx.Fcitx5')","('org.fcitx.Fcitx5',)").replace("Panel(bus, '/org/bangke/Panel'), ","")
 (root/'controller.py').write_text(mock)
 current=root/'state/omarchy/current';current.mkdir(parents=True)
 catalog=pathlib.Path(str(SOURCE / 'panel-omarchy/themes'))
@@ -16,13 +16,13 @@ try:
   procs.append(subprocess.Popen(cmd,env=env,stdout=(root/(name+'.log')).open('w'),stderr=subprocess.STDOUT))
  bus=dbus.SessionBus()
  for i in range(100):
-  if bus.name_has_owner('org.kde.impanel') and (root/'ready').exists():break
+  if bus.name_has_owner('org.bangke.Panel') and (root/'ready').exists():break
   time.sleep(.1)
- assert bus.name_has_owner('org.kde.impanel'),(root/'panel.log').read_text()
- panel=dbus.Interface(bus.get_object('org.kde.impanel','/org/kde/impanel'),'org.kde.impanel2')
+ assert bus.name_has_owner('org.bangke.Panel'),(root/'panel.log').read_text()
+ panel=dbus.Interface(bus.get_object('org.bangke.Panel','/org/bangke/Panel'),'org.bangke.Panel1')
  def signal(name,args,signature):
-  message=dbus.lowlevel.SignalMessage('/kimpanel','org.kde.kimpanel.inputmethod',name)
-  message.append(*args,signature=signature);bus.send_message(message);bus.flush()
+  panel.get_dbus_method(name)(*args)
+
  signal('RegisterProperties',[['/Fcitx/im:蚌壳拼音:input-keyboard:Bangke:0:0']],'as')
  def wait_palette(expected):
   for _ in range(100):
