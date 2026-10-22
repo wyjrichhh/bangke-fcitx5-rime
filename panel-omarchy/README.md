@@ -32,3 +32,7 @@ Qt 解析 YAML 并输出版本化外观 JSON，供设置预览与运行面板共
 `test-appearance.py` 检查真实绘制像素及完整长文本；`test-stability.py` 检查组合输入定位和布局；`test-live-settings.py`、`test-theme-switch.py` 使用独立 D-Bus 与 Xvfb 检查真实 GTK / Qt 协作（可设置 `BANGKE_TEST_DISPLAY` 使用现有 XWayland）；`test-isolation.py` 在真实桌面检查原生/蚌壳窗口归属、点击翻页、失焦及面板停止/恢复；`tray/test-registration.py` 检查标准托盘注册。`render-reference.py` 可生成六种高亮参考图，产物不提交。
 
 完整命令见 [LINUX_BUILD.md](../LINUX_BUILD.md)。运行时问题首先检查 `journalctl --user -u bangke-panel -u bangke-caret` 和 `~/.cache/bangke-pinyin/setup.log`。
+
+## 本次隔离验收范围
+
+Omarchy ARM64 包 `5.0.19-16` 已验证真实 XWayland 原生窗口/蚌壳窗口切换、中文上屏、点击翻页、失焦、面板停止与恢复，以及原有 Classic UI 配置保留。原生 Wayland GTK 自动化探针未获得键盘焦点（合成器仍聚焦原有终端），未计为通过；合成快捷键也不能替代 text-input-v3 原生输入链路，需在可获得键盘焦点的会话继续验收。GNOME 和 x86_64 本次未做桌面验收。
