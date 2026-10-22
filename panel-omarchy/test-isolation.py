@@ -47,7 +47,7 @@ def native_windows():
     tree = subprocess.check_output(['xwininfo', '-root', '-tree'], text=True)
     shown = []
     for line in tree.splitlines():
-        if 'Fcitx Input Window' not in line: continue
+        if 'Fcitx5 Input Window' not in line: continue
         xid = line.strip().split()[0]
         attrs = subprocess.check_output(['xwininfo', '-id', xid], text=True)
         if 'Map State: IsViewable' in attrs: shown.append(xid)
