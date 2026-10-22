@@ -43,9 +43,9 @@ def pump(seconds=.3):
 
 
 def key(value):
-    subprocess.run(['hyprctl', 'dispatch', 'sendshortcut',
-                    ','+value+',title:^(Bangke UI isolation probe)$'],
-                   check=True, stdout=subprocess.DEVNULL)
+    expression = "hl.dsp.send_shortcut({mods='',key="+json.dumps(value)+",window="+json.dumps('address:'+own[0]['address'])+"})"
+    result = subprocess.run(['hyprctl', 'dispatch', expression], text=True, capture_output=True)
+    assert result.returncode == 0, (expression, result.stdout, result.stderr)
     pump(.04)
 
 
