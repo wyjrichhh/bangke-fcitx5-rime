@@ -20,6 +20,8 @@
 #include <QGuiApplication>
 #include <QWindow>
 #include <QKeyEvent>
+#include <QApplication>
+#include <QDebug>
 #include <QVBoxLayout>
 
 #include "ui/themepalette.h"
@@ -250,6 +252,9 @@ SettingsComboBox::SettingsComboBox(QWidget* parent) : QComboBox(parent) {
   popupView_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   popupView_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   popupView_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  // A read-only option list must not start an input-method composition.
+  popupView_->setAttribute(Qt::WA_InputMethodEnabled, false);
+  popupView_->viewport()->setAttribute(Qt::WA_InputMethodEnabled, false);
   popupView_->setUniformItemSizes(true);
   popupView_->setMouseTracking(true);
   popupView_->setItemDelegate(new ComboItemDelegate(popupView_));
@@ -293,6 +298,7 @@ void SettingsComboBox::showPopup() {
   popup_->move(x, useAbove ? above.y() - popupHeight : below.y());
   popup_->ensurePolished();
   popupView_->ensurePolished();
+  qApp->installEventFilter(this);
   popupView_->setFocus(Qt::PopupFocusReason);
   popup_->show();
   popupView_->setFocus(Qt::PopupFocusReason);
@@ -316,18 +322,38 @@ void SettingsComboBox::commitIndex(const QModelIndex& index) {
 
 bool SettingsComboBox::eventFilter(QObject* watched, QEvent* event) {
   if (watched == popup_ && event->type() == QEvent::Hide) {
+    qApp->removeEventFilter(this);
     // Outside clicks also need to reset QComboBox's internal pressed state.
     QComboBox::hidePopup();
     update();
   }
-  if (event->type() == QEvent::KeyPress &&
-      (watched == popup_ || watched == popupView_ ||
-       (popupView_ && watched == popupView_->viewport()))) {
+  if ((event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride) &&
+      popupView_ && (popup_->isVisible() || watched == popup_ ||
+                     watched == popupView_ || watched == popupView_->viewport())) {
     auto* key = static_cast<QKeyEvent*>(event);
-    if (key->key() == Qt::Key_Escape) { hidePopup(); return true; }
-    if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
-      commitIndex(popupView_->currentIndex());
+    const bool navigation = key->key() == Qt::Key_Escape || key->key() == Qt::Key_Return ||
+                            key->key() == Qt::Key_Enter || key->key() == Qt::Key_Up ||
+                            key->key() == Qt::Key_Down || key->key() == Qt::Key_Home ||
+                            key->key() == Qt::Key_End || key->key() == Qt::Key_PageUp ||
+                            key->key() == Qt::Key_PageDown;
+    if (event->type() == QEvent::ShortcutOverride && navigation) {
+      key->accept();
       return true;
+    }
+    if (event->type() == QEvent::KeyPress) {
+      if (qEnvironmentVariableIsSet("BANGKE_TRACE_DROPDOWN_KEYS") && key->key() >= Qt::Key_Escape)
+        qInfo("Dropdown navigation key=%x target=%s", key->key(), watched->metaObject()->className());
+      if (key->key() == Qt::Key_Escape) { hidePopup(); return true; }
+      if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+        commitIndex(popupView_->currentIndex());
+        return true;
+      }
+      // Wayland can retain keyboard delivery on the parent surface during a popup grab.
+      if (navigation && popup_->isVisible() && watched != popupView_ &&
+          watched != popupView_->viewport()) {
+        QApplication::sendEvent(popupView_, event);
+        return true;
+      }
     }
   }
   return QComboBox::eventFilter(watched, event);
