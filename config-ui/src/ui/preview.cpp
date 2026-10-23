@@ -4,6 +4,8 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <QTabBar>
+#include <QHBoxLayout>
 #include <QtMath>
 #include <QPainter>
 #include <QPainterPath>
@@ -330,12 +332,19 @@ PreviewStrip::PreviewStrip(QWidget* parent) : QWidget(parent) {
   setObjectName(QStringLiteral("previewScene"));
   setAttribute(Qt::WA_StyledBackground);
   setMinimumWidth(360);
+  setFixedHeight(360);
   auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(20, 20, 20, 20);
-  layout->setSpacing(16);
-  auto* heading = new QLabel(QStringLiteral("实时预览 · 当前系统主题"), this);
+  layout->setSpacing(14);
+  auto* headingRow = new QHBoxLayout;
+  auto* heading = new QLabel(QStringLiteral("文稿 · 输入场景"), this);
   heading->setObjectName(QStringLiteral("previewHeading"));
-  layout->addWidget(heading);
+  auto* theme = new QLabel(QStringLiteral("桌面主题背景"), this);
+  theme->setObjectName(QStringLiteral("previewHeading"));
+  headingRow->addWidget(heading);
+  headingRow->addStretch(1);
+  headingRow->addWidget(theme);
+  layout->addLayout(headingRow);
   composition_ = new QLabel(this);
   composition_->setObjectName(QStringLiteral("previewComposition"));
   composition_->setWordWrap(true);
@@ -346,11 +355,24 @@ PreviewStrip::PreviewStrip(QWidget* parent) : QWidget(parent) {
   scroll_->setFrameShape(QFrame::NoFrame);
   scroll_->setWidget(new PreviewCanvas(scroll_));
   layout->addWidget(scroll_, 1);
-  auto* note = new QLabel(QStringLiteral("原始字号预览，超出区域可滚动。\n毛玻璃与宽度记忆需在实际输入中验证。"), this);
+  sampleTabs_ = new QTabBar(this);
+  sampleTabs_->setObjectName(QStringLiteral("previewSampleTabs"));
+  sampleTabs_->setDrawBase(false);
+  sampleTabs_->setExpanding(true);
+  sampleTabs_->addTab(QStringLiteral("普通候选"));
+  sampleTabs_->addTab(QStringLiteral("长句候选"));
+  sampleTabs_->hide();
+  connect(sampleTabs_, &QTabBar::currentChanged, this, [this](int) { refresh(); });
+  layout->addWidget(sampleTabs_);
+  auto* note = new QLabel(QStringLiteral("原始字号 · 超出区域可滚动查看"), this);
   note->setObjectName(QStringLiteral("previewNote"));
   note->setWordWrap(true);
   layout->addWidget(note);
   samples_ = PreviewSamples::defaults();
+}
+
+void PreviewStrip::enableSampleSelection() {
+  sampleTabs_->show();
 }
 
 void PreviewStrip::setSpecs(const PanelSpec& light, const PanelSpec& dark) {
@@ -370,15 +392,23 @@ void PreviewStrip::setInlineCandidate(bool enabled) {
 
 void PreviewStrip::refresh() {
   const auto& spec = palette::dark() ? dark_ : light_;
+  auto samples = samples_;
+  if (!sampleTabs_->isHidden() && sampleTabs_->currentIndex() == 1) {
+    samples.preedit = QStringLiteral("rang biao da geng zi ran");
+    samples.candidates = {
+        {QStringLiteral("1."), QStringLiteral("让每一次输入，都成为自然流畅的表达"), QStringLiteral("AI 示例")},
+        {QStringLiteral("2."), QStringLiteral("让表达更自然"), QString()},
+        {QStringLiteral("3."), QStringLiteral("让每一次输入都恰到好处"), QString()}};
+  }
   QString composing;
   if (spec.inlinePreedit)
-    composing = inlineCandidate_ && !samples_.candidates.isEmpty()
-                    ? samples_.candidates.first().text : samples_.preedit;
+    composing = inlineCandidate_ && !samples.candidates.isEmpty()
+                    ? samples.candidates.first().text : samples.preedit;
   composition_->setText(QStringLiteral("今天，") + composing + QStringLiteral("▏"));
-  static_cast<PreviewCanvas*>(scroll_->widget())->setContent(spec, samples_);
+  static_cast<PreviewCanvas*>(scroll_->widget())->setContent(spec, samples);
 }
 
-QSize PreviewStrip::sizeHint() const { return QSize(480, 460); }
+QSize PreviewStrip::sizeHint() const { return QSize(480, 360); }
 
 void PreviewStrip::paintEvent(QPaintEvent*) {}
 

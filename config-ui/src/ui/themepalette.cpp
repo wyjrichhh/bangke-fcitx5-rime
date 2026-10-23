@@ -83,7 +83,7 @@ QString styleSheet(const QWidget* widget) {
   Q_UNUSED(widget);
   const QString fg = text(nullptr).name();
   const QString bg = window(nullptr).name();
-  const QString cardBg = card(nullptr).name();
+  const QString cardBg = mix(window(nullptr), text(nullptr), 0.035).name();
   const QString line = mix(card(nullptr), text(nullptr), 0.16).name();
   const QString acc = accent(nullptr).name();
   const QString wellColor = well(nullptr).name();
@@ -98,7 +98,7 @@ QString styleSheet(const QWidget* widget) {
   // 没有平台主题时 Qt 用 Fusion（浅色），深色系统下这些原生控件会亮得刺眼，
   // 所以把用到的都自己画一遍。
   return QStringLiteral(R"(
-QWidget { color: %1; font-size: 13px; }
+QWidget { color: %1; font-size: 13px; font-family: "Noto Sans CJK SC", sans-serif; }
 QMainWindow, QStackedWidget, QDialog, QMessageBox { background: %2; color: %1; }
 QMessageBox QLabel { background: transparent; color: %1; }
 QMessageBox QTextEdit { background: %4; color: %1; }
@@ -112,8 +112,9 @@ QTabBar#pageNavigation::tab {
 QTabBar#pageNavigation::tab:hover { background: %6; color: %1; }
 QTabBar#pageNavigation::tab:selected { background: %6; color: %7; font-weight: 600; }
 QTabBar#pageNavigation::tab:focus { border-color: %7; }
-QWidget#previewScene { background: %10; border: 1px solid %5; border-radius: 12px; }
-QLabel#previewHeading { color: %9; font-size: 12px; }
+QWidget#previewScene { background: %4; border: 1px solid %5; border-radius: 12px; }
+QLabel#previewHeading { color: %9; font-size: 11px; }
+QLabel#previewColumnHeading { color: %9; font-size: 12px; }
 QLabel#previewComposition { background: transparent; font-size: 15px; }
 QLabel#previewNote { color: %9; font-size: 12px; }
 
@@ -123,7 +124,17 @@ QLabel#brandMark { color: %7; font-size: 76px; font-weight: 300; background: tra
 QLabel#brandTitle { font-size: 23px; font-weight: 600; }
 QLabel#brandCaption { color: %9; font-size: 12px; line-height: 1.6; }
 QFrame#settingsGroup { background: %4; border: 1px solid %5; border-radius: 12px; }
-QLabel#sectionHeading { color: %7; border-bottom: 1px solid %5; font-size: 12px; }
+QLabel#sectionHeading { color: %9; font-size: 12px; border: none; background: transparent; }
+QToolButton#advancedAppearanceToggle {
+  color: %9; background: transparent; border: none; text-align: left;
+  padding: 10px 0; font-size: 12px;
+}
+QToolButton#advancedAppearanceToggle:hover { color: %1; }
+QTabBar#previewSampleTabs::tab {
+  background: transparent; color: %9; padding: 7px 16px; border: 1px solid %5;
+  border-radius: 6px; margin: 0 2px;
+}
+QTabBar#previewSampleTabs::tab:selected { background: %6; color: %7; }
 QWidget#settingsFooter { background: %2; border-top: 1px solid %5; }
 QScrollArea { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
@@ -137,7 +148,7 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 QComboBox {
   background: %4; border: 1px solid %5; border-radius: 6px;
-  padding: 7px 12px; min-height: 24px;
+  padding: 5px 10px; min-height: 20px;
 }
 QComboBox:hover { background: %6; }
 QComboBox::drop-down { border: none; width: 18px; }
@@ -150,7 +161,7 @@ QLineEdit {
 }
 QPushButton {
   background: %4; border: 1px solid %5; border-radius: 6px;
-  padding: 8px 18px; min-height: 24px;
+  padding: 6px 14px; min-height: 20px;
 }
 QPushButton:hover { background: %6; }
 QPushButton[primary="true"] { background: %7; border-color: %7; color: %8; }

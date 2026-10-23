@@ -131,7 +131,7 @@ class PageScaffold : public QWidget {
   PageScaffold(const QString& title, const QString& subtitle,
                QWidget* parent = nullptr);
 
-  void addSection(const QString& title);
+  void addSection(const QString& title, bool collapsible = false);
   void addRow(QWidget* row);
   void addWidget(QWidget* widget);
   void addFixedWidget(QWidget* widget);

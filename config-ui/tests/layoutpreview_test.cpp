@@ -17,6 +17,7 @@
 #include <QTabBar>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QToolButton>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
@@ -87,6 +88,22 @@ int main(int argc, char** argv) {
             "Preview must remain outside settings scroll area");
     require(preview->mapTo(&page, {}).x() > settingsScroll->mapTo(&page, {}).x(),
             "Settings must be left of preview");
+    require(preview->height() <= 400, "Preview must remain a compact scene");
+    const auto previewSize = preview->size();
+    auto* advanced = page.findChild<QToolButton*>("advancedAppearanceToggle");
+    require(advanced && !advanced->isChecked(), "Advanced controls should start collapsed");
+    advanced->click();
+    app.processEvents();
+    require(settingsScroll->verticalScrollBar()->maximum() > 0,
+            "Expanded settings must scroll inside the left column");
+    require(preview->size() == previewSize, "Expanding settings stretched the preview");
+    auto* sampleTabs = preview->findChild<QTabBar*>("previewSampleTabs");
+    require(sampleTabs && sampleTabs->isVisible(), "Sample selector must be available");
+    const auto ordinarySample = capture(preview);
+    sampleTabs->setCurrentIndex(1);
+    require(ordinarySample != capture(preview), "Long sample did not update preview");
+    require(preview->size() == previewSize, "Long sample stretched the preview");
+    sampleTabs->setCurrentIndex(0);
     const auto position = preview->mapTo(&page, {});
     settingsScroll->verticalScrollBar()->setValue(settingsScroll->verticalScrollBar()->maximum());
     app.processEvents();

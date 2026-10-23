@@ -137,6 +137,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
       config_(config) {
   customPanel_ = RimeDeploy::usesCustomPanel() || config.platform().source == ThemeSource::Omarchy;
   preview_ = new PreviewStrip(this);
+  preview_->enableSampleSelection();
   addSideWidget(preview_);
   if (customPanel_) {
     auto* watcher = new QFileSystemWatcher(this);
@@ -166,7 +167,6 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
     });
   }
 
-
   QStringList schemeNames;
   QStringList schemeIds;
   for (const QString& id : config_.schemeIds()) {
@@ -174,10 +174,9 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
     schemeNames << config_.displayName(id);
   }
 
-  addSection(QStringLiteral("颜色"));
-  scheme_ = new ComboRow(QStringLiteral("配色方案"), customPanel_ ? QStringLiteral("选择系统配色自动切换；选择具体配色则固定使用。") : QString(), schemeNames,
+  scheme_ = new ComboRow(QStringLiteral("配色方案"), customPanel_ ? QStringLiteral("跟随桌面主题，或使用固定配色。") : QString(), schemeNames,
                          schemeIds, style.colorScheme, this);
-  addRow(scheme_);
+
   if (customPanel_ || fcitxSupportsDarkTheme()) {
     QStringList darkNames{QStringLiteral("跟随浅色方案")};
     QStringList darkIds{QString()};
@@ -187,25 +186,20 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
         QStringLiteral("深色配色方案"),
         QStringLiteral("系统切到深色时使用。"), darkNames,
         darkIds, style.colorSchemeDark, this);
-    addRow(schemeDark_);
   }
   transparency_ = new SliderRow(
       QStringLiteral("背景透明度"),
       customPanel_ ? QStringLiteral("0 为不透明。统一调整背景、高亮底与阴影；文字和边框保持清晰。") : QStringLiteral("0 为不透明。"),
       0.0, 0.95, 0.05, 1.0 - style.alpha, QString(), this);
-  addRow(transparency_);
 
-  addSection(QStringLiteral("字体"));
   font_ = new FontButton(style.fontFace, this);
-  addRow(font_);
+
   fontSize_ = new SliderRow(QStringLiteral("字号"), QString(), 8, 48, 1,
                             style.fontPoint, QStringLiteral(" pt"), this);
-  addRow(fontSize_);
 
-  addSection(QStringLiteral("布局"));
   if (customPanel_) {
     candidateLayout_ = new ComboRow(QStringLiteral("候选排列"),QStringLiteral("候选列表排列方向，与每个候选中文字的方向分别设置。"),{QStringLiteral("横排一行"),QStringLiteral("竖排一列")},{QStringLiteral("linear"),QStringLiteral("stacked")},style.candidateListLayout,this);
-    addRow(candidateLayout_);
+
   }
   orientation_ = new ComboRow(
       customPanel_ ? QStringLiteral("文字方向") : QStringLiteral("候选排列"),
@@ -213,7 +207,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
       {QStringLiteral("横排"), QStringLiteral("竖排")},
       {QStringLiteral("horizontal"), QStringLiteral("vertical")},
       style.textOrientation, this);
-  addRow(orientation_);
+
   if (qgetenv("BANGKE_PANEL_BACKEND") == "gnome") {
     orientation_->setToolTip(QStringLiteral("竖排时每个候选逐字纵向显示。"));
   }
@@ -222,17 +216,17 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
       QStringLiteral("候选面板的圆角半径。"),
       0, customPanel_ ? 30 : qMax(bangke::maxSafeCornerRadiusPt(), style.cornerRadius), 1,
       style.cornerRadius, QStringLiteral(" pt"), this);
-  addRow(corner_);
+
   shadow_ = new SliderRow(
       QStringLiteral("阴影大小"),
       QStringLiteral("高亮候选投在面板上的柔影。"),
       0, 30, 1, style.shadowSize, QStringLiteral(" pt"), this);
-  addRow(shadow_);
+
   border_ = new SliderRow(
       QStringLiteral("边框宽度"),
       QStringLiteral("0 为不画边框，颜色取自配色方案。"),
       0, 20, 1, qMax(0, style.borderWidth), QStringLiteral(" pt"), this);
-  addRow(border_);
+
   if (customPanel_) {
     borderHeight_ = new SliderRow(QStringLiteral("边框高度"), QStringLiteral("与边框宽度取较小值作为描边粗细；0 关闭描边。"), 0, 20, 1, qMax(0, style.borderHeight), QStringLiteral(" pt"), this);
     highlightCorner_ = new SliderRow(QStringLiteral("高亮圆角"), QStringLiteral("当前连续贴边高亮使用直角内部边界，此参数暂不生效。"), 0, 30, 1, style.hilitedCornerRadius, QStringLiteral(" pt"), this);
@@ -241,7 +235,6 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
     highlightCorner_->setToolTip(QStringLiteral("当前面板采用贴边连续高亮，内部边界固定为直角；此参数暂不生效。"));
     lineSpacing_ = new SliderRow(QStringLiteral("行间距"), QString(), -10, 30, 1, style.lineSpacing, QStringLiteral(" pt"), this);
     spacing_ = new SliderRow(QStringLiteral("预编辑间距"), QStringLiteral("拼音显示在面板时，与候选之间的距离。"), -10, 30, 1, style.spacing, QStringLiteral(" pt"), this);
-    for (auto* row : {borderHeight_, highlightCorner_, lineSpacing_, spacing_}) addRow(row);
     inlinePreedit_ = new ToggleRow(QStringLiteral("在输入框中显示预编辑"), QStringLiteral("关闭后拼音显示在候选面板顶部。"), style.inlinePreedit, this);
     inlineCandidate_ = new ToggleRow(QStringLiteral("在输入框中显示选中候选"), QStringLiteral("应用支持预编辑且上项开启时生效。"), style.inlineCandidate, this);
     memorizeSize_ = new ToggleRow(QStringLiteral("记忆本次输入的面板宽度"), QStringLiteral("连续输入时只扩宽，结束本次输入后重置；需实际输入验证，静态预览不模拟。"), style.memorizeSize, this);
@@ -250,18 +243,28 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
     if (qgetenv("BANGKE_PANEL_BACKEND") == "gnome") {
       mutualExclusive_->setToolTip(QStringLiteral("高亮区域移除面板底色，避免两层透明背景叠加。"));
     }
-    for (auto* row : {inlinePreedit_, inlineCandidate_, memorizeSize_, mutualExclusive_, translucency_}) addRow(row);
     candidateFormat_ = new TextRow(QStringLiteral("候选格式"), QStringLiteral("支持 [label]、[candidate]、[comment]，例如 [label]. [candidate] [comment]。"), style.candidateFormat, this);
-    addRow(candidateFormat_);
   }
 
-  addSection(QStringLiteral("显示"));
   showPaging_ = new ToggleRow(
       QStringLiteral("显示翻页按钮"),
       QStringLiteral("候选超过一页时显示左右翻页箭头。"), style.showPaging,
       this);
-  addRow(showPaging_);
 
+  addSection(QStringLiteral("配色与主题"));
+  addRow(scheme_);
+  addSection(QStringLiteral("文字与形态"));
+  for (QWidget* row : {static_cast<QWidget*>(font_), static_cast<QWidget*>(fontSize_),
+                       static_cast<QWidget*>(corner_),
+                       static_cast<QWidget*>(candidateLayout_ ? candidateLayout_ : orientation_)})
+    addRow(row);
+  addSection(QStringLiteral("更多外观选项"), true);
+  const QList<QWidget*> advanced{
+      schemeDark_, transparency_, customPanel_ ? orientation_ : nullptr,
+      shadow_, border_, borderHeight_, highlightCorner_, lineSpacing_, spacing_,
+      inlinePreedit_, inlineCandidate_, memorizeSize_, translucency_, mutualExclusive_,
+      candidateFormat_, showPaging_};
+  for (auto* row : advanced) if (row) addRow(row);
 
   const auto notify = [this]() {
     updatePreview();

@@ -11,6 +11,7 @@
 class QPainter;
 class QLabel;
 class QScrollArea;
+class QTabBar;
 
 namespace bangke {
 
@@ -47,6 +48,7 @@ class PreviewStrip : public QWidget {
   void setSpecs(const PanelSpec& light, const PanelSpec& dark);
   void setSamples(const PreviewSamples& samples);
   void setInlineCandidate(bool enabled);
+  void enableSampleSelection();
 
   QSize sizeHint() const override;
 
@@ -56,6 +58,7 @@ class PreviewStrip : public QWidget {
  private:
   void refresh();
   QScrollArea* scroll_ = nullptr;
+  QTabBar* sampleTabs_ = nullptr;
   QLabel* composition_ = nullptr;
   bool inlineCandidate_ = false;
   PanelSpec light_;

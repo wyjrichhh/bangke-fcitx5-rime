@@ -11,6 +11,7 @@
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QStyledItemDelegate>
+#include <QToolButton>
 #include <QStyle>
 #include <QVBoxLayout>
 
@@ -110,7 +111,7 @@ RowShell::RowShell(const QString& label, const QString& hint, QWidget* control,
   setMinimumHeight(64);
   auto* layout = new QHBoxLayout(this);
   layout->setContentsMargins(18, 12, 18, 12);
-  layout->setSpacing(24);
+  layout->setSpacing(18);
   auto* labels = new QVBoxLayout;
   labels->setSpacing(5);
   auto* labelWidget = makeLabel(label, false, this);
@@ -253,7 +254,8 @@ TextRow::TextRow(const QString& label, const QString& hint,
                  const QString& value, QWidget* parent)
     : RowShell(label, hint, nullptr, parent) {
   edit_ = new QLineEdit(value, this);
-  edit_->setMinimumWidth(280);
+  edit_->setMinimumWidth(150);
+  edit_->setMaximumWidth(220);
   if (auto* shell = qobject_cast<QHBoxLayout*>(this->layout()))
     shell->addWidget(edit_);
 }
@@ -292,6 +294,8 @@ PageScaffold::PageScaffold(const QString& title, const QString& subtitle,
 
   auto* scroll = new QScrollArea(this);
   scroll->setWidgetResizable(true);
+  scroll->setMinimumSize(0, 0);
+  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   scroll->setFrameShape(QFrame::NoFrame);
   content_ = new QWidget(scroll);
   layout_ = new QVBoxLayout(content_);
@@ -311,7 +315,21 @@ void PageScaffold::addSideWidget(QWidget* widget) {
   columns->setSpacing(28);
   layout_->setContentsMargins(0, 0, 8, 0);
   columns->addWidget(scroll, 1);
-  columns->addWidget(widget, 1);
+  auto* previewColumn = new QWidget(this);
+  auto* previewLayout = new QVBoxLayout(previewColumn);
+  previewLayout->setContentsMargins(0, 0, 0, 0);
+  previewLayout->setSpacing(12);
+  auto* caption = makeLabel(QStringLiteral("实时预览"), true, previewColumn);
+  caption->setObjectName(QStringLiteral("previewColumnHeading"));
+  previewLayout->addWidget(caption);
+  widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  previewLayout->addWidget(widget);
+  auto* explanation = makeLabel(QStringLiteral("调整左侧设置，即时查看候选窗的变化。"), true, previewColumn);
+  explanation->setWordWrap(true);
+  previewLayout->addWidget(explanation);
+  previewLayout->addStretch(1);
+  columns->addWidget(previewColumn, 1);
+  scroll->setObjectName(QStringLiteral("settingsScroll"));
   outer->addLayout(columns, 1);
 }
 
@@ -323,20 +341,34 @@ void PageScaffold::addFixedWidget(QWidget* widget) {
   static_cast<QVBoxLayout*>(layout())->insertWidget(1, container);
 }
 
-void PageScaffold::addSection(const QString& title) {
+void PageScaffold::addSection(const QString& title, bool collapsible) {
   auto* group = new QFrame(content_);
   group->setObjectName(QStringLiteral("settingsGroup"));
   sectionLayout_ = new QVBoxLayout(group);
-  sectionLayout_->setContentsMargins(0, 0, 0, 8);
+  sectionLayout_->setContentsMargins(0, 0, 0, 0);
   sectionLayout_->setSpacing(0);
-  auto* label = makeLabel(title, false, group);
-  label->setObjectName(QStringLiteral("sectionHeading"));
-  label->setContentsMargins(18, 14, 18, 12);
-  QFont font = label->font();
-  font.setBold(true);
-  label->setFont(font);
-  sectionLayout_->addWidget(label);
-  if (layout_->count() > 1) layout_->insertSpacing(layout_->count() - 1, 18);
+  if (layout_->count() > 1) layout_->insertSpacing(layout_->count() - 1, 22);
+  if (collapsible) {
+    auto* toggle = new QToolButton(content_);
+    toggle->setObjectName(QStringLiteral("advancedAppearanceToggle"));
+    toggle->setText(title);
+    toggle->setCheckable(true);
+    toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toggle->setArrowType(Qt::RightArrow);
+    toggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    toggle->setAccessibleName(title);
+    group->setVisible(false);
+    connect(toggle, &QToolButton::toggled, group, [group, toggle](bool checked) {
+      group->setVisible(checked);
+      toggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
+    });
+    layout_->insertWidget(layout_->count() - 1, toggle);
+  } else {
+    auto* label = makeLabel(title, true, content_);
+    label->setObjectName(QStringLiteral("sectionHeading"));
+    label->setContentsMargins(0, 0, 0, 10);
+    layout_->insertWidget(layout_->count() - 1, label);
+  }
   layout_->insertWidget(layout_->count() - 1, group);
 }
 
