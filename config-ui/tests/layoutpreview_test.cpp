@@ -240,10 +240,12 @@ int main(int argc, char** argv) {
       require(combo->size() == QSize(220, 34), QStringLiteral("Dropdown %1 dimensions: %2 x %3; min %4 x %5, max %6 x %7").arg(combo->currentText()).arg(combo->width()).arg(combo->height()).arg(combo->minimumWidth()).arg(combo->minimumHeight()).arg(combo->maximumWidth()).arg(combo->maximumHeight()));
       require(!combo->style()->styleHint(QStyle::SH_ComboBox_Popup, nullptr, combo),
               "Native menu sizing must not override bounded dropdown lists");
-      require(combo->view()->objectName() == QStringLiteral("settingsComboPopup"),
+      auto* themed = qobject_cast<bangke::SettingsComboBox*>(combo);
+      require(themed, "Every settings dropdown must use the shared popup implementation");
+      require(themed->popupView()->objectName() == QStringLiteral("settingsComboPopup"),
               "Every dropdown popup must use the shared theme");
-      require(combo->view()->maximumHeight() <= 322, "Dropdown list height must be bounded");
-      require(combo->view()->window()->objectName() == QStringLiteral("settingsComboContainer"),
+      require(themed->popupView()->maximumHeight() <= 320, "Dropdown list height must be bounded");
+      require(themed->popupContainer()->objectName() == QStringLiteral("settingsComboContainer"),
               "Popup frames must use the same theme as their viewports");
       const auto frame = combo->grab().toImage();
       const auto background = platform.window;

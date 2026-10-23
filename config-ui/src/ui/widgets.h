@@ -2,12 +2,16 @@
 #define FCITX5_RIME_CONFIG_UI_WIDGETS_H_
 
 #include <QAbstractButton>
+#include <QComboBox>
 #include <QLabel>
 #include <QListWidget>
 #include <QString>
 #include <QWidget>
 
-class QComboBox;
+class QAbstractItemView;
+class QFrame;
+class QListView;
+class QModelIndex;
 class QMouseEvent;
 class QLineEdit;
 class QScrollArea;
@@ -16,7 +20,23 @@ class QVBoxLayout;
 
 namespace bangke {
 
-void configureComboBox(QComboBox* combo);
+class SettingsComboBox : public QComboBox {
+  Q_OBJECT
+ public:
+  explicit SettingsComboBox(QWidget* parent = nullptr);
+  void showPopup() override;
+  void hidePopup() override;
+  QAbstractItemView* popupView() const;
+  QWidget* popupContainer() const;
+
+ protected:
+  bool eventFilter(QObject* watched, QEvent* event) override;
+
+ private:
+  void commitIndex(const QModelIndex& index);
+  QFrame* popup_ = nullptr;
+  QListView* popupView_ = nullptr;
+};
 
 // mac 的开关：轨道 + 圆点，切换时滑动。QSS 的 ::indicator 做不出这个观感。
 class Switch : public QAbstractButton {

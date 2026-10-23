@@ -651,8 +651,7 @@ SchemasPage::SchemasPage(const RimeData& data, QWidget* parent)
       userDict->setChecked(schema.userDict);
       layout->addWidget(userDict);
     }
-    auto* simplified = new QComboBox(row);
-    configureComboBox(simplified);
+    auto* simplified = new SettingsComboBox(row);
     simplified->addItem(QStringLiteral("简体"));
     simplified->addItem(QStringLiteral("繁体"));
     simplified->setCurrentIndex(schema.simplified ? 0 : 1);

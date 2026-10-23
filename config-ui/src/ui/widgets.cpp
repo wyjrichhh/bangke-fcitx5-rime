@@ -16,6 +16,10 @@
 #include <QToolButton>
 #include <QStyle>
 #include <QStyleFactory>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QWindow>
+#include <QKeyEvent>
 #include <QVBoxLayout>
 
 #include "ui/themepalette.h"
@@ -201,43 +205,134 @@ void SliderRow::updateText() {
   value_->setText(text + suffix_);
 }
 
-void configureComboBox(QComboBox* combo) {
-  // GTK menu geometry ignores maxVisibleItems and may animate independently of QSS.
-  // Scope a stable widget style to the combo; colors still come from the app theme.
-  auto* style = QStyleFactory::create(QStringLiteral("Fusion"));
-  style->setParent(combo);
-  combo->setStyle(style);
-  combo->setFixedSize(220, 34);
-  combo->setMaxVisibleItems(10);
-  combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-  combo->setMinimumContentsLength(12);
-  auto* view = combo->view();
-  view->setObjectName(QStringLiteral("settingsComboPopup"));
-  view->viewport()->setObjectName(QStringLiteral("settingsComboViewport"));
-  auto* popup = view->window();
-  popup->setObjectName(QStringLiteral("settingsComboContainer"));
-  popup->setAttribute(Qt::WA_StyledBackground);
+namespace {
+class ComboItemDelegate : public QStyledItemDelegate {
+ public:
+  using QStyledItemDelegate::QStyledItemDelegate;
+  QSize sizeHint(const QStyleOptionViewItem& option,
+                 const QModelIndex& index) const override {
+    auto size = QStyledItemDelegate::sizeHint(option, index);
+    size.setHeight(32);
+    return size;
+  }
+};
+}  // namespace
+
+SettingsComboBox::SettingsComboBox(QWidget* parent) : QComboBox(parent) {
+  // Keep GTK menu animation and sizing out of the settings controls.
+  auto* fieldStyle = QStyleFactory::create(QStringLiteral("Fusion"));
+  fieldStyle->setParent(this);
+  setStyle(fieldStyle);
+  setFixedSize(220, 34);
+  setMaxVisibleItems(10);
+  setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  setMinimumContentsLength(12);
+
+  popup_ = new QFrame(this, Qt::Popup | Qt::FramelessWindowHint);
+  popup_->setObjectName(QStringLiteral("settingsComboContainer"));
+  popup_->setAttribute(Qt::WA_StyledBackground);
+  popup_->setAttribute(Qt::WA_TranslucentBackground);
+  popup_->setAttribute(Qt::WA_NoMouseReplay);
   auto* popupStyle = QStyleFactory::create(QStringLiteral("Fusion"));
-  popupStyle->setParent(popup);
-  popup->setStyle(popupStyle);
-  popup->setContentsMargins(0, 0, 0, 0);
-  if (popup->layout()) popup->layout()->setContentsMargins(0, 0, 0, 0);
-  view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  view->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-  view->setMinimumHeight(0);
-  view->setMaximumHeight(322);
-  if (auto* list = qobject_cast<QListView*>(view)) list->setUniformItemSizes(true);
+  popupStyle->setParent(popup_);
+  popup_->setStyle(popupStyle);
+  popup_->installEventFilter(this);
+  auto* layout = new QVBoxLayout(popup_);
+  layout->setContentsMargins(1, 1, 1, 1);
+  layout->setSpacing(0);
+  popupView_ = new QListView(popup_);
+  popupView_->setObjectName(QStringLiteral("settingsComboPopup"));
+  popupView_->viewport()->setObjectName(QStringLiteral("settingsComboViewport"));
+  popupView_->setFrameShape(QFrame::NoFrame);
+  popupView_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  popupView_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  popupView_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  popupView_->setUniformItemSizes(true);
+  popupView_->setMouseTracking(true);
+  popupView_->setItemDelegate(new ComboItemDelegate(popupView_));
+  popupView_->setMaximumHeight(320);
+  popupView_->installEventFilter(this);
+  layout->addWidget(popupView_);
+  connect(popupView_, &QListView::clicked, this, &SettingsComboBox::commitIndex);
+  connect(popupView_, &QListView::entered, this, [this](const QModelIndex& index) {
+    if (!(index.flags() & Qt::ItemIsEnabled)) return;
+    popupView_->setCurrentIndex(index);
+    emit highlighted(index.row());
+  });
+}
+
+QAbstractItemView* SettingsComboBox::popupView() const { return popupView_; }
+QWidget* SettingsComboBox::popupContainer() const { return popup_; }
+
+void SettingsComboBox::showPopup() {
+  if (!isEnabled() || count() == 0) return;
+  if (popup_->isVisible()) { hidePopup(); return; }
+  popupView_->setModel(model());
+  popupView_->setModelColumn(modelColumn());
+  popupView_->setRootIndex(rootModelIndex());
+  const auto current = model()->index(currentIndex(), modelColumn(), rootModelIndex());
+  popupView_->setCurrentIndex(current);
+  auto* screen = window()->windowHandle() ? window()->windowHandle()->screen()
+                                          : QGuiApplication::primaryScreen();
+  const QRect available = screen->availableGeometry();
+  const QPoint below = mapToGlobal(QPoint(0, height() + 4));
+  const QPoint above = mapToGlobal(QPoint(0, -4));
+  int popupHeight = qMin(count(), maxVisibleItems()) * 32 + 2;
+  const int roomBelow = available.bottom() - below.y() + 1;
+  const int roomAbove = above.y() - available.top();
+  const bool useAbove = roomBelow < popupHeight && roomAbove > roomBelow;
+  popupHeight = qMax(1, qMin(popupHeight, useAbove ? roomAbove : roomBelow));
+  const int popupWidth = qMin(width(), available.width());
+  popup_->setFixedSize(popupWidth, popupHeight);
+  const int x = qBound(available.left(), below.x(), available.right() - popupWidth + 1);
+  popup_->move(x, useAbove ? above.y() - popupHeight : below.y());
+  popup_->ensurePolished();
+  popupView_->ensurePolished();
+  popup_->show();
+  popupView_->setFocus(Qt::PopupFocusReason);
+  popupView_->scrollTo(current, QAbstractItemView::PositionAtCenter);
+  update();
+}
+
+void SettingsComboBox::hidePopup() {
+  if (popup_->isVisible()) popup_->hide();
+  else QComboBox::hidePopup();
+  update();
+}
+
+void SettingsComboBox::commitIndex(const QModelIndex& index) {
+  if (!index.isValid() || !(index.flags() & Qt::ItemIsEnabled) ||
+      !(index.flags() & Qt::ItemIsSelectable)) return;
+  setCurrentIndex(index.row());
+  emit activated(index.row());
+  hidePopup();
+}
+
+bool SettingsComboBox::eventFilter(QObject* watched, QEvent* event) {
+  if (watched == popup_ && event->type() == QEvent::Hide) {
+    // Outside clicks also need to reset QComboBox's internal pressed state.
+    QComboBox::hidePopup();
+    update();
+  }
+  if ((watched == popupView_ || watched == popup_) && event->type() == QEvent::KeyPress) {
+    auto* key = static_cast<QKeyEvent*>(event);
+    if (key->key() == Qt::Key_Escape) { hidePopup(); return true; }
+    if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+      commitIndex(popupView_->currentIndex());
+      return true;
+    }
+  }
+  return QComboBox::eventFilter(watched, event);
 }
 
 ComboRow::ComboRow(const QString& label, const QString& hint,
                    const QStringList& items, const QStringList& values,
                    const QString& current, QWidget* parent)
     : RowShell(label, hint, nullptr, parent) {
-  combo_ = new QComboBox(this);
+  combo_ = new SettingsComboBox(this);
   for (int i = 0; i < items.size(); ++i) {
     combo_->addItem(items.at(i), i < values.size() ? values.at(i) : items.at(i));
   }
-  configureComboBox(combo_);
   if (auto* shell = qobject_cast<QHBoxLayout*>(this->layout()))
     shell->addWidget(combo_);
   setCurrentValue(current);

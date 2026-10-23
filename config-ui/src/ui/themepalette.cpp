@@ -153,13 +153,13 @@ QComboBox {
 QComboBox:hover { background: %6; }
 QComboBox::drop-down { background: transparent; border: none; width: 24px; }
 QAbstractItemView#settingsComboPopup {
-  background: %4; color: %1; border: 1px solid %5; border-radius: 6px;
+  background: %4; color: %1; border: none;
   padding: 0; margin: 0;
   selection-background-color: %7; selection-color: %8; outline: none;
 }
 QWidget#settingsComboViewport { background: %4; color: %1; }
 QFrame#settingsComboContainer {
-  background: %4; color: %1; border: none; padding: 0; margin: 0;
+  background: %4; color: %1; border: 1px solid %5; border-radius: 6px; padding: 0; margin: 0;
 }
 QAbstractItemView#settingsComboPopup::item {
   min-height: 30px; padding: 0 10px; margin: 0; border: none; border-radius: 3px;
