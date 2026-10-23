@@ -4,6 +4,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFontDatabase>
+#include <QFontInfo>
+#include <QFontMetricsF>
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
@@ -146,9 +148,23 @@ int main(int argc, char** argv) {
       auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
       require(dialog, "Font chooser did not open");
       auto* list = dialog->findChild<QListWidget*>();
-      const auto items = list->findItems("Noto Serif CJK SC", Qt::MatchExactly);
-      require(!items.isEmpty(), "QA font unavailable");
-      list->setCurrentItem(items.first());
+      const auto original = bangke::panelSpecFor(config, baseline, platform.dark).font;
+      const auto originalFamily = QFontInfo(original).family();
+      const QString sample = QStringLiteral("蚌壳 bang ke 123");
+      const auto originalWidth = QFontMetricsF(original).horizontalAdvance(sample);
+      QListWidgetItem* alternate = nullptr;
+      for (int i = 0; i < list->count(); ++i) {
+        auto* item = list->item(i);
+        QFont candidate(item->text());
+        candidate.setPointSize(baseline.fontPoint);
+        if (QFontInfo(candidate).family() != originalFamily &&
+            qAbs(QFontMetricsF(candidate).horizontalAdvance(sample) - originalWidth) > 1) {
+          alternate = item;
+          break;
+        }
+      }
+      require(alternate, "QA requires two installed fonts with different glyph metrics");
+      list->setCurrentItem(alternate);
       dialog->accept();
     });
     setting(page, QStringLiteral("字体"))->findChild<QPushButton*>()->click();
