@@ -143,6 +143,37 @@ try:
             assert len(commits) > n, 'Private-panel click did not commit'
         print(json.dumps({'im': name, 'bangke_visible': state['visible'],
                           'native_windows': native, 'commit': commits[-1]}, ensure_ascii=False), flush=True)
+    select_menu('rime-ai')
+    service = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/bangke'),
+                              'org.fcitx.Fcitx.Bangke1')
+    original_schema = str(service.GetCurrentSchema())
+    try:
+        for schema, label in (('luna_pinyin', '蚌-明'), ('rime_ice', '蚌-雾')):
+            service.SetSchema(schema)
+            service.SetAsciiMode(False)
+            pump(.15)
+            state = json.loads(str(panel.GetPanelState()))
+            assert state['visible'] and state['auxiliary_visible'], state
+            assert state['auxiliary'].startswith(label), state
+            assert not state['candidates'] and not native_windows(), state
+            pump(1.3)
+            state = json.loads(str(panel.GetPanelState()))
+            assert not state['visible'] and not state['auxiliary_visible'], state
+        select_menu('rime')
+        pump(.15)
+        assert not json.loads(str(panel.GetPanelState()))['visible']
+        select_menu('rime-ai')
+        pump(.15)
+        state = json.loads(str(panel.GetPanelState()))
+        assert state['visible'] and state['auxiliary'].startswith('蚌-雾'), state
+        context.FocusOut()
+        pump(.2)
+        assert not json.loads(str(panel.GetPanelState()))['visible']
+        context.FocusIn()
+        print('PASS: schema and tray switch information bubbles, timeout, focus-out and UI isolation', flush=True)
+    finally:
+        if original_schema:
+            service.SetSchema(original_schema)
     # Switch before prediction settles: a late Bangke refresh must not clear
     # the upstream engine's shared input panel on the same input context.
     for cycle in range(8):
