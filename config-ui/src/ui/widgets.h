@@ -30,6 +30,7 @@ class SettingsComboBox : public QComboBox {
   QWidget* popupContainer() const;
 
  protected:
+  void paintEvent(QPaintEvent* event) override;
   bool eventFilter(QObject* watched, QEvent* event) override;
 
  private:

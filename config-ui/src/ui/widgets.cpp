@@ -16,6 +16,8 @@
 #include <QToolButton>
 #include <QStyle>
 #include <QStyleFactory>
+#include <QStylePainter>
+#include <QStyleOptionComboBox>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QWindow>
@@ -210,6 +212,12 @@ namespace {
 class ComboItemDelegate : public QStyledItemDelegate {
  public:
   using QStyledItemDelegate::QStyledItemDelegate;
+  void initStyleOption(QStyleOptionViewItem* option,
+                       const QModelIndex& index) const override {
+    QStyledItemDelegate::initStyleOption(option, index);
+    option->displayAlignment = Qt::AlignCenter;
+    option->textElideMode = Qt::ElideRight;
+  }
   QSize sizeHint(const QStyleOptionViewItem& option,
                  const QModelIndex& index) const override {
     auto size = QStyledItemDelegate::sizeHint(option, index);
@@ -272,6 +280,19 @@ SettingsComboBox::SettingsComboBox(QWidget* parent) : QComboBox(parent) {
 
 QAbstractItemView* SettingsComboBox::popupView() const { return popupView_; }
 QWidget* SettingsComboBox::popupContainer() const { return popup_; }
+
+void SettingsComboBox::paintEvent(QPaintEvent*) {
+  QStylePainter painter(this);
+  QStyleOptionComboBox option;
+  initStyleOption(&option);
+  painter.drawComplexControl(QStyle::CC_ComboBox, option);
+  // Reserve equal space on both sides so the arrow does not offset the text.
+  const QRect textRect = rect().adjusted(28, 1, -28, -1);
+  const QString text = fontMetrics().elidedText(currentText(), Qt::ElideRight,
+                                               textRect.width());
+  painter.drawItemText(textRect, Qt::AlignCenter, option.palette, isEnabled(),
+                       text, QPalette::ButtonText);
+}
 
 void SettingsComboBox::showPopup() {
   if (!isEnabled() || count() == 0) return;
