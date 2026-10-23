@@ -143,6 +143,30 @@ try:
             assert len(commits) > n, 'Private-panel click did not commit'
         print(json.dumps({'im': name, 'bangke_visible': state['visible'],
                           'native_windows': native, 'commit': commits[-1]}, ensure_ascii=False), flush=True)
+    # Switch before prediction settles: a late Bangke refresh must not clear
+    # the upstream engine's shared input panel on the same input context.
+    for cycle in range(8):
+        context.Reset()
+        controller.Activate()
+        select_menu('rime-ai')
+        bangke = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/bangke'),
+                                'org.fcitx.Fcitx.Bangke1')
+        bangke.SetAsciiMode(False)
+        for key in 'jintiantianqihenhao':
+            context.ProcessKeyEvent(ord(key), 0, 0, False, 0)
+        select_menu('rime')
+        context.Reset()
+        upstream = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/rime'),
+                                  'org.fcitx.Fcitx.Rime1')
+        upstream.SetAsciiMode(False)
+        for key in 'nihao':
+            context.ProcessKeyEvent(ord(key), 0, 0, False, 0)
+        pump(1)
+        assert not json.loads(str(panel.GetPanelState()))['visible']
+        assert native_windows(), ('Late Bangke refresh hid upstream candidates', cycle)
+        assert_commit()
+        assert commits[-1] == '你好', commits[-1]
+    print('PASS: eight rapid switches preserve upstream candidates during pending Bangke inference', flush=True)
     type_text('rime-ai', 'nihao')
     context.FocusOut()
     pump()
