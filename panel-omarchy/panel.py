@@ -76,6 +76,8 @@ METHODS = {
     "UpdateLookupTableCursor": ("i", ""),
     "SetLookupTable": ("asasasbbii", "b"),
     "UpdatePreeditText": ("ssib", ""),
+    "UpdateAuxiliaryText": ("s", ""),
+    "ShowAuxiliaryText": ("b", ""),
     "UpdatePreeditCaret": ("i", ""),
     "UpdateSpotLocation": ("ii", ""),
     "SetSpotRect": ("iiii", ""),
@@ -849,8 +851,11 @@ class Panel(Gtk.Window):
                                       vertical, limit, self._layout,
                                       float(self.options.get("font_point",13.5))*4/3, self.options)
         self._preedit_height = 0
-        if S["preedit_visible"] and S["preedit"]:
-            layout = self._layout(S["preedit"],geometry["font"])
+        header = '\n'.join(text for text in (
+            S.get("auxiliary", "") if S.get("auxiliary_visible", False) else "",
+            S["preedit"] if S["preedit_visible"] else "") if text)
+        if header:
+            layout = self._layout(header,geometry["font"])
             layout.set_width(max(1,limit-24)*Pango.SCALE)
             layout.set_wrap(Pango.WrapMode.WORD_CHAR)
             layout.set_ellipsize(Pango.EllipsizeMode.NONE)
@@ -880,7 +885,7 @@ class Panel(Gtk.Window):
         return mon.get_geometry() if mon else None
 
     def refresh(self):
-        if S["im"] != OUR_IM or not S["enabled"] or (not (S["lookup_visible"] and S["cands"]) and not (S["preedit_visible"] and S["preedit"])):
+        if S["im"] != OUR_IM or not S["enabled"] or (not (S["lookup_visible"] and S["cands"]) and not (S["preedit_visible"] and S["preedit"]) and not (S.get("auxiliary_visible", False) and S.get("auxiliary", ""))):
             self._composition_size.reset()
             if S["composition_active"] is not True: self._composition_origin.reset()
             self._last_spot = None
@@ -1078,6 +1083,7 @@ def _handle(name, args):
         first_baseline=[geometry["pad"],round(cells[0][1]+geometry["text_tops"][0])+geometry["layouts"][0].get_baseline()/Pango.SCALE] if cells else None
         return json.dumps(dict(first_baseline=first_baseline,origin=panel._composition_origin.point,composition_active=S["composition_active"],size=panel._requested_size,buffer_size=[panel.get_allocated_width(),panel.get_allocated_height()],content_size=[geometry.get("width"),geometry.get("height")],visible_size=panel._visible_size,scroll=[panel.scroll.get_vadjustment().get_value(),panel.scroll.get_vadjustment().get_upper(),panel.scroll.get_vadjustment().get_page_size()],im=S["im"],visible=panel.get_visible(),style=panel.options,
                                candidates=len(S["cands"]),comments=sum(bool(value) for value in S["comments"]),preedit_visible=S["preedit_visible"],
+                               auxiliary=S.get("auxiliary", ""),auxiliary_visible=S.get("auxiliary_visible", False),
                                preedit_height=getattr(panel,"_preedit_height",0),paging_height=getattr(panel,"_paging_height",0)))
     if name == "ShowLookupTable":
         S["lookup_visible"]=bool(args[0]);panel.queue_refresh();return None
@@ -1102,6 +1108,10 @@ def _handle(name, args):
         S["preedit"] = str(args[0]);panel.queue_refresh();return None
     if name == "ShowPreedit":
         S["preedit_visible"] = bool(args[0]);panel.queue_refresh();return None
+    if name == "UpdateAuxiliaryText":
+        S["auxiliary"] = str(args[0]);panel.queue_refresh();return None
+    if name == "ShowAuxiliaryText":
+        S["auxiliary_visible"] = bool(args[0]);panel.queue_refresh();return None
     if name == "GetPanelIdentity":
         return "bangke-panel:" + PANEL_VERSION
     if name == "SetLayout":
@@ -1261,6 +1271,7 @@ def main():
     def backend_changed(_name, _old, owner):
         S["lookup_visible"] = False
         S["preedit_visible"] = False
+        S["auxiliary_visible"] = False
         panel.queue_refresh()
         if owner: agent._call("Refresh")
     bus.add_signal_receiver(backend_changed, signal_name="NameOwnerChanged",

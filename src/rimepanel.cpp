@@ -112,6 +112,10 @@ void RimePanel::hide() {
                                          "ShowPreedit");
     preedit << false;
     preedit.send();
+    auto auxiliary = bus->createMethodCall(serviceName, panelPath, panelInterface,
+                                           "ShowAuxiliaryText");
+    auxiliary << false;
+    auxiliary.send();
 }
 void RimePanel::update(InputContext *ic) {
     if (!usesPrivatePanel(ic)) {
@@ -133,6 +137,18 @@ void RimePanel::update(InputContext *ic) {
          << int32_t(rect.height()) << ic->scaleFactor();
     spot.send();
     auto &input = ic->inputPanel();
+    auto auxiliaryText = input.auxUp().toString();
+    if (!input.auxDown().empty()) {
+        if (!auxiliaryText.empty())
+            auxiliaryText += '\n';
+        auxiliaryText += input.auxDown().toString();
+    }
+    auto auxiliary = call("UpdateAuxiliaryText");
+    auxiliary << auxiliaryText;
+    auxiliary.send();
+    auto auxiliaryVisible = call("ShowAuxiliaryText");
+    auxiliaryVisible << !auxiliaryText.empty();
+    auxiliaryVisible.send();
     auto preedit = call("UpdatePreeditText");
     preedit << input.preedit().toString() << std::string()
             << int32_t(input.preedit().cursor()) << true;
