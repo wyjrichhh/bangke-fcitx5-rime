@@ -32,7 +32,7 @@ docker run --rm --platform linux/arm64 \
 
 Intel/AMD 将 `--platform` 改为 `linux/amd64`，镜像改为 `archlinux:latest`，输出目录改为 `build-out/x86_64`。两个构建不要同时挂载同一份可写源码：使用独立克隆或 worktree，防止 `build/` 和 `config-ui/build/` 混入另一架构的对象文件。
 
-结果为 `/out/bangke-pinyin-<版本>-<pkgrel>-<架构>.pkg.tar.zst`。版本默认 `5.0.19`，当前 pkgrel 为 `23`。`SKIP_DEPS=1`、`SKIP_LIBRIME=1` 只适用于已有且匹配的构建环境。`dist/repack-arch.sh` 复用已组装的二进制，源码变更后必须先重新编译并更新安装树，不能用重打包代替构建。
+结果为 `/out/bangke-pinyin-<版本>-<pkgrel>-<架构>.pkg.tar.zst`。版本默认 `5.0.20`，当前 pkgrel 为 `1`。`SKIP_DEPS=1`、`SKIP_LIBRIME=1` 只适用于已有且匹配的构建环境。`dist/repack-arch.sh` 复用已组装的二进制，源码变更后必须先重新编译并更新安装树，不能用重打包代替构建。
 
 ## Ubuntu 24.04 amd64
 
