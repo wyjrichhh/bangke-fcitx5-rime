@@ -20,6 +20,7 @@
 #include <QToolButton>
 #include <QAbstractItemView>
 #include <QStyle>
+#include <QKeyEvent>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
@@ -247,6 +248,21 @@ int main(int argc, char** argv) {
       require(themed->popupView()->maximumHeight() <= 320, "Dropdown list height must be bounded");
       require(themed->popupContainer()->objectName() == QStringLiteral("settingsComboContainer"),
               "Popup frames must use the same theme as their viewports");
+      if (combo->count() > 1) {
+        const int original = combo->currentIndex();
+        const int alternative = (original + 1) % combo->count();
+        auto* view = themed->popupView();
+        view->setModel(combo->model());
+        view->setCurrentIndex(combo->model()->index(alternative, combo->modelColumn()));
+        QKeyEvent accept(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+        QApplication::sendEvent(view, &accept);
+        require(combo->currentIndex() == alternative, "Return must commit the highlighted option");
+        combo->setCurrentIndex(original);
+        view->setCurrentIndex(combo->model()->index(alternative, combo->modelColumn()));
+        QKeyEvent cancel(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QApplication::sendEvent(view, &cancel);
+        require(combo->currentIndex() == original, "Escape must preserve the original option");
+      }
       const auto frame = combo->grab().toImage();
       const auto background = platform.window;
       const auto foreground = platform.text;

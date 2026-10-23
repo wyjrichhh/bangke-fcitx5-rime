@@ -252,8 +252,10 @@ SettingsComboBox::SettingsComboBox(QWidget* parent) : QComboBox(parent) {
   popupView_->setItemDelegate(new ComboItemDelegate(popupView_));
   popupView_->setMaximumHeight(320);
   popupView_->installEventFilter(this);
+  popupView_->viewport()->installEventFilter(this);
   layout->addWidget(popupView_);
   connect(popupView_, &QListView::clicked, this, &SettingsComboBox::commitIndex);
+  connect(popupView_, &QListView::activated, this, &SettingsComboBox::commitIndex);
   connect(popupView_, &QListView::entered, this, [this](const QModelIndex& index) {
     if (!(index.flags() & Qt::ItemIsEnabled)) return;
     popupView_->setCurrentIndex(index);
@@ -314,7 +316,9 @@ bool SettingsComboBox::eventFilter(QObject* watched, QEvent* event) {
     QComboBox::hidePopup();
     update();
   }
-  if ((watched == popupView_ || watched == popup_) && event->type() == QEvent::KeyPress) {
+  if (event->type() == QEvent::KeyPress &&
+      (watched == popup_ || watched == popupView_ ||
+       (popupView_ && watched == popupView_->viewport()))) {
     auto* key = static_cast<QKeyEvent*>(event);
     if (key->key() == Qt::Key_Escape) { hidePopup(); return true; }
     if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
