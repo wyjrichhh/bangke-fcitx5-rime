@@ -66,7 +66,7 @@ try:
     keyboard.NotifyKeyboardKeysym(dbus.UInt32(0xffe1), False)
     pump(1)
     controller.SetCurrentIM('rime-ai'); controller.Activate()
-    rime = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/rime'), 'org.fcitx.Fcitx.Rime1')
+    rime = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/bangke'), 'org.fcitx.Fcitx.Bangke1')
     # Fresh seed installation compiles dictionaries asynchronously. Query the
     # real Rime session instead of racing startup with a fixed short delay.
     for _ in range(600):
@@ -119,7 +119,7 @@ try:
             try:
                 command = (proc / 'cmdline').read_bytes().split(b'\0')[0]
                 environment = (proc / 'environ').read_bytes().split(b'\0')
-                if command.endswith(b'fcitx5-rime-config') and (b'DBUS_SESSION_BUS_ADDRESS=' + os.environ['DBUS_SESSION_BUS_ADDRESS'].encode()) in environment:
+                if command.endswith(b'bangke-pinyin-config') and (b'DBUS_SESSION_BUS_ADDRESS=' + os.environ['DBUS_SESSION_BUS_ADDRESS'].encode()) in environment:
                     settings_pids.append(int(proc.name))
             except (OSError, PermissionError): pass
         if settings_pids: break

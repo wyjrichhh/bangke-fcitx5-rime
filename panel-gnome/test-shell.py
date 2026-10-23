@@ -30,7 +30,7 @@ class Input(dbus.service.Object):
     @dbus.service.signal('org.bangke.Candidate1', signature='asasas')
     def Candidates(self, combined, texts, comments): pass
 
-fixture = Input(bus, '/rime')
+fixture = Input(bus, '/bangke')
 def interface(name='org.kde.impanel', path='/org/kde/impanel', iface='org.kde.impanel2'):
     return dbus.Interface(bus.get_object(name, path), iface)
 panel = interface()

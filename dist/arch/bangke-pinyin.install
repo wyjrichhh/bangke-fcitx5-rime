@@ -1,9 +1,3 @@
-pre_upgrade() {
-  if grep -q '^Name=蚌壳拼音$' /usr/share/fcitx5/inputmethod/rime.conf 2>/dev/null; then
-    mkdir -p /var/lib/bangke-pinyin
-    touch /var/lib/bangke-pinyin/migrate-rime
-  fi
-}
 # User data is checksum-managed by the shared lifecycle helper.
 post_install() { bash /usr/lib/bangke-pinyin/package.sh install; }
 post_upgrade() { post_install; }

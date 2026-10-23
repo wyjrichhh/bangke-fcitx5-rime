@@ -51,7 +51,7 @@ struct RimeData {
   AISettings ai;
 };
 
-// 定点读写 rime 用户配置（~/.local/share/fcitx5/rime/*.yaml）。
+// 定点读写 rime 用户配置（~/.local/share/fcitx5/bangke/*.yaml）。
 // 只读写已管理的键，其余行（含注释、translators/filters 等高级项）字节级保留。
 class YamlConfig {
  public:

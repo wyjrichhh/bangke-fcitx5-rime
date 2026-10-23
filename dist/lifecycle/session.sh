@@ -62,24 +62,22 @@ if ((${#EXTRA[@]})) && [[ -f "$BASE/gnome.sh" ]]; then
   bash "$BASE/gnome.sh" "$ACTION" || echo 'GNOME panel setup deferred; retaining existing UI'
 fi
 if [[ -f /usr/share/bangke-pinyin/omarchy || -f "$BASE/omarchy" ]]; then
+  # Remove our obsolete global override without touching user UI or skin settings.
+  rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-kimpanel.conf"
   if [[ $ACTION == install ]]; then
+    mkdir -p "$CONFIG/systemd/user/$UNIT.d"
+    cp /usr/share/bangke-pinyin/20-bangke-tray.conf "$CONFIG/systemd/user/$UNIT.d/20-bangke-tray.conf"
     # Migrate only the exact experimental launch paths; retain unrelated Hyprland configuration.
     python3 "$BASE/migrate-experiment.py"
     systemctl --user daemon-reload || true
     if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
       systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP || true
       systemctl --user restart bangke-caret.service || true
-      if systemctl --user restart bangke-panel.service &&
-         timeout 8 bash -c 'until gdbus call --session --dest org.kde.impanel --object-path /org/kde/impanel --method org.kde.impanel2.GetPanelIdentity; do sleep 0.2; done'; then
-        mkdir -p "$CONFIG/systemd/user/$UNIT.d"
-        cp /usr/share/bangke-pinyin/20-bangke-kimpanel.conf "$CONFIG/systemd/user/$UNIT.d/20-bangke-kimpanel.conf"
-      else
-        rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-kimpanel.conf"
-        echo 'Panel unavailable; keeping classic UI'
-      fi
+      systemctl --user restart bangke-panel.service || echo 'Bangke panel unavailable; retaining the original Fcitx UI'
     fi
   else
     systemctl --user stop bangke-update-monitor.service bangke-panel.service bangke-caret.service || true
+    rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-tray.conf"
     rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-kimpanel.conf"
     python3 "$BASE/migrate-experiment.py" --remove
   fi

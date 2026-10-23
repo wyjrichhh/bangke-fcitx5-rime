@@ -95,7 +95,7 @@ RimeCandidateList::RimeCandidateList(RimeEngine *engine, InputContext *ic,
             texts.push_back(text);comments.push_back(comment);
             combined.push_back(text+(comment.empty()?"":" ")+comment);
         }
-        auto message=bus->createSignal("/rime","org.bangke.Candidate1","Candidates");
+        auto message=bus->createSignal("/bangke","org.bangke.Candidate1","Candidates");
         message << combined << texts << comments;
         message.send();
     }

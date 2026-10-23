@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.6.0)
-project(fcitx5-rime-config VERSION 5.0.11 LANGUAGES CXX)
+project(bangke-pinyin-config VERSION 5.0.11 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 
 find_package(Qt5 REQUIRED COMPONENTS Widgets DBus Network Gui Core)
 
-add_executable(fcitx5-rime-config
+add_executable(bangke-pinyin-config
     src/update/updatechecker.cpp
     src/update/updatechecker.h
     src/fcitxprofile.cpp
@@ -51,11 +51,11 @@ add_executable(fcitx5-rime-config
     src/ui/widgets.h
 )
 
-target_include_directories(fcitx5-rime-config PRIVATE src)
-target_link_libraries(fcitx5-rime-config PRIVATE Qt5::Widgets Qt5::DBus Qt5::Network)
+target_include_directories(bangke-pinyin-config PRIVATE src)
+target_link_libraries(bangke-pinyin-config PRIVATE Qt5::Widgets Qt5::DBus Qt5::Network)
 
-install(TARGETS fcitx5-rime-config DESTINATION bin)
-install(FILES data/fcitx5-rime-config.desktop DESTINATION share/applications)
+install(TARGETS bangke-pinyin-config DESTINATION bin)
+install(FILES data/bangke-pinyin-config.desktop DESTINATION share/applications)
 
 # 补丁写盘的回归测试（不随包分发）。
 add_executable(stylepatch_test EXCLUDE_FROM_ALL
@@ -143,7 +143,7 @@ target_include_directories(profile_test PRIVATE src)
 target_link_libraries(profile_test PRIVATE Qt5::Core)
 
 # Exercise the real save slot against an isolated mock session bus.
-get_target_property(custompanel_save_sources fcitx5-rime-config SOURCES)
+get_target_property(custompanel_save_sources bangke-pinyin-config SOURCES)
 list(REMOVE_ITEM custompanel_save_sources src/main.cpp)
 add_executable(custompanel_save_test EXCLUDE_FROM_ALL
     tests/custompanel_save_test.cpp ${custompanel_save_sources})

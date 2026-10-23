@@ -5,8 +5,8 @@
   classicui 画不出圆角高亮/单行布局/动画，而且它的主题是**全局**的（改配色会连带影响
   别的输入法）。自绘面板这两件事都能做，且**不需要改 fcitx5**。
 
-数据来源：fcitx5 的 kimpanel 协议（面板占住 org.kde.impanel，fcitx5 往里推候选表、
-光标矩形、以及属性——属性里带当前输入法名，见 README）。
+数据来源：蚌壳 addon 的独立 D-Bus 通道 org.bangke.Panel。
+仅蚌壳输入上下文使用此面板，其他输入法保留 Fcitx5 原有 UI。
 定位方式：layer-shell（合成器给"贴在指定位置"的正规口子），锚在左上、用 margin 顶到
 光标下方 —— 这是 Wayland 下客户端唯一能自己定位的正规途径。
 
@@ -46,11 +46,11 @@ except (ValueError, ImportError):
     GtkLayerShell = None
 
 # 每次改动都往上加一 —— 排查时一眼能确认"跑的是哪一版"
-PANEL_VERSION = "2026-10-15.22-background-opacity"
+PANEL_VERSION = "2026-10-22.1-private-input-panel"
 
-SERVICE = "org.kde.impanel"
-PATH = "/org/kde/impanel"
-IFACE = "org.kde.impanel2"
+SERVICE = "org.bangke.Panel"
+PATH = "/org/bangke/Panel"
+IFACE = "org.bangke.Panel1"
 
 # 我们自己的物料配色（底/正文/强调），以及给别的输入法用的中性配色
 OURS = {"back": (0xFA / 255, 0xF1 / 255, 0xEA / 255), "text": (0x2B / 255, 0x26 / 255, 0x22 / 255)}
@@ -76,6 +76,8 @@ METHODS = {
     "UpdateLookupTableCursor": ("i", ""),
     "SetLookupTable": ("asasasbbii", "b"),
     "UpdatePreeditText": ("ssib", ""),
+    "UpdateAuxiliaryText": ("s", ""),
+    "ShowAuxiliaryText": ("b", ""),
     "UpdatePreeditCaret": ("i", ""),
     "UpdateSpotLocation": ("ii", ""),
     "SetSpotRect": ("iiii", ""),
@@ -654,7 +656,7 @@ def panel_preferences():
         pass
     data_home = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
     try:
-        saved = (data_home / "fcitx5/rime/bangke.custom.yaml").read_text()
+        saved = (data_home / "fcitx5/bangke/bangke.custom.yaml").read_text()
         orientation = re.search(r"(?m)^\s*style/text_orientation:\s*['\"]?(horizontal|vertical)", saved)
         if orientation:
             vertical = orientation[1] == "vertical"
@@ -799,7 +801,7 @@ class Panel(Gtk.Window):
         generation = self._theme_generation
         def worker():
             try:
-                result = subprocess.run(["fcitx5-rime-config","--dump-panel-appearance"],capture_output=True,text=True,timeout=8)
+                result = subprocess.run(["bangke-pinyin-config","--dump-panel-appearance"],capture_output=True,text=True,timeout=8)
                 if result.returncode: raise ValueError(result.stderr.strip())
                 data = validate_appearance(result.stdout)
                 def apply():
@@ -849,8 +851,11 @@ class Panel(Gtk.Window):
                                       vertical, limit, self._layout,
                                       float(self.options.get("font_point",13.5))*4/3, self.options)
         self._preedit_height = 0
-        if S["preedit_visible"] and S["preedit"]:
-            layout = self._layout(S["preedit"],geometry["font"])
+        header = '\n'.join(text for text in (
+            S.get("auxiliary", "") if S.get("auxiliary_visible", False) else "",
+            S["preedit"] if S["preedit_visible"] else "") if text)
+        if header:
+            layout = self._layout(header,geometry["font"])
             layout.set_width(max(1,limit-24)*Pango.SCALE)
             layout.set_wrap(Pango.WrapMode.WORD_CHAR)
             layout.set_ellipsize(Pango.EllipsizeMode.NONE)
@@ -880,7 +885,7 @@ class Panel(Gtk.Window):
         return mon.get_geometry() if mon else None
 
     def refresh(self):
-        if not S["enabled"] or (not (S["lookup_visible"] and S["cands"]) and not (S["preedit_visible"] and S["preedit"])):
+        if S["im"] != OUR_IM or not S["enabled"] or (not (S["lookup_visible"] and S["cands"]) and not (S["preedit_visible"] and S["preedit"]) and not (S.get("auxiliary_visible", False) and S.get("auxiliary", ""))):
             self._composition_size.reset()
             if S["composition_active"] is not True: self._composition_origin.reset()
             self._last_spot = None
@@ -1078,6 +1083,7 @@ def _handle(name, args):
         first_baseline=[geometry["pad"],round(cells[0][1]+geometry["text_tops"][0])+geometry["layouts"][0].get_baseline()/Pango.SCALE] if cells else None
         return json.dumps(dict(first_baseline=first_baseline,origin=panel._composition_origin.point,composition_active=S["composition_active"],size=panel._requested_size,buffer_size=[panel.get_allocated_width(),panel.get_allocated_height()],content_size=[geometry.get("width"),geometry.get("height")],visible_size=panel._visible_size,scroll=[panel.scroll.get_vadjustment().get_value(),panel.scroll.get_vadjustment().get_upper(),panel.scroll.get_vadjustment().get_page_size()],im=S["im"],visible=panel.get_visible(),style=panel.options,
                                candidates=len(S["cands"]),comments=sum(bool(value) for value in S["comments"]),preedit_visible=S["preedit_visible"],
+                               auxiliary=S.get("auxiliary", ""),auxiliary_visible=S.get("auxiliary_visible", False),
                                preedit_height=getattr(panel,"_preedit_height",0),paging_height=getattr(panel,"_paging_height",0)))
     if name == "ShowLookupTable":
         S["lookup_visible"]=bool(args[0]);panel.queue_refresh();return None
@@ -1102,6 +1108,10 @@ def _handle(name, args):
         S["preedit"] = str(args[0]);panel.queue_refresh();return None
     if name == "ShowPreedit":
         S["preedit_visible"] = bool(args[0]);panel.queue_refresh();return None
+    if name == "UpdateAuxiliaryText":
+        S["auxiliary"] = str(args[0]);panel.queue_refresh();return None
+    if name == "ShowAuxiliaryText":
+        S["auxiliary_visible"] = bool(args[0]);panel.queue_refresh();return None
     if name == "GetPanelIdentity":
         return "bangke-panel:" + PANEL_VERSION
     if name == "SetLayout":
@@ -1207,26 +1217,8 @@ def _noop(self):
     pass
 
 
-def panel_signal(name, interface, signature=""):
-    if signature:
-        def emit(self, value): pass
-    else:
-        def emit(self): pass
-    emit.__name__ = name
-    return dbus.service.signal(interface,signature=signature)(emit)
-
-
 def panel_class():
-    ns = {
-        "_handle": staticmethod(_handle),
-        # 报到信号：fcitx5 用 MatchRule(sender=org.kde.impanel, interface=...) 过滤**消息**，
-        # 所以必须由面板这条连接发出信号，而不是去调它的方法（它 /kimpanel 上没导出方法）。
-        "SelectCandidate": panel_signal("SelectCandidate","org.kde.impanel","i"),
-        "LookupTablePageUp": panel_signal("LookupTablePageUp","org.kde.impanel"),
-        "LookupTablePageDown": panel_signal("LookupTablePageDown","org.kde.impanel"),
-        "PanelCreated2": panel_signal("PanelCreated2",IFACE),
-        "PanelCreated": panel_signal("PanelCreated","org.kde.impanel"),
-    }
+    ns = {"_handle": staticmethod(_handle)}
     meta = type(dbus.service.Object)
     for mname, (sig_in, sig_out) in METHODS.items():
         cnt = _arg_count(sig_in)
@@ -1242,25 +1234,18 @@ def panel_class():
     return meta("KimpanelAgent", (dbus.service.Object,), ns)
 
 
-FcitxName = "org.kde.kimpanel.inputmethod"
+class PrivateAgent:
+    def __init__(self, bus):
+        self.bus = bus
 
+    def _call(self, method, *args):
+        message = dbus.lowlevel.MethodCallMessage("org.fcitx.Fcitx5", "/bangke/panel", IFACE, method)
+        message.append(*args, signature="i" if method == "SelectCandidate" else "b" if method == "Page" else "")
+        self.bus.send_message(message)
 
-def announce(agent):
-    """报到：fcitx5 靠这个**信号**才算"面板存在"，之后才会推坐标、属性、候选。
-
-    fcitx5 那边是用 MatchRule(sender="org.kde.impanel", interface="org.kde.impanel2")
-    过滤**消息**的（不是导出方法），所以这里必须发信号而不是调方法：
-      * v2 → interface org.kde.impanel2, member PanelCreated2
-      * v1 → interface org.kde.impanel,  member PanelCreated
-    不发的话，fcitx5 只会在启动那一刻推一次空坐标，之后的一切都被丢掉 ——
-    表现就是面板永远贴在兜底位置。
-    """
-    for member in ("PanelCreated2", "PanelCreated"):
-        try:
-            getattr(agent, member)()
-            log(f"报到: {member}")
-        except Exception as e:  # noqa: BLE001
-            log(f"报到失败({member}):", e)
+    def SelectCandidate(self, index): self._call("SelectCandidate", index)
+    def LookupTablePageUp(self): self._call("Page", True)
+    def LookupTablePageDown(self): self._call("Page", False)
 
 
 def main():
@@ -1272,26 +1257,26 @@ def main():
         log("!! 连不上会话总线，退出:", e)
         return 1
     log("总线:", os.environ.get("DBUS_SESSION_BUS_ADDRESS") or "(没有！会另起私有总线，fcitx5 看不到)")
-    name = dbus.service.BusName(SERVICE, bus, allow_replacement=True, replace_existing=True)
-    agent = panel_class()(bus_name=name, object_path=PATH)
-    # Coordinates/tables use v2 methods; IM properties, preedit and visibility
-    # use v1 signals. Both channels are required by the Fcitx kimpanel protocol.
-    bus.add_signal_receiver(lambda *args, **kw: _handle(kw["member"],list(args)),
-                            dbus_interface="org.kde.kimpanel.inputmethod",member_keyword="member")
+    name = dbus.service.BusName(SERVICE, bus, do_not_queue=True)
+    exported = panel_class()(bus_name=name, object_path=PATH)
+    agent = PrivateAgent(bus)
     bus.add_signal_receiver(lambda *args: _handle("Composition",list(args)),
-                            dbus_interface="org.bangke.Candidate1",signal_name="Composition")
+                            dbus_interface="org.bangke.Candidate1",signal_name="Composition",
+                            bus_name="org.fcitx.Fcitx5",path="/bangke")
     bus.add_signal_receiver(lambda *args: _handle("CandidateDetails",list(args)),
-                            dbus_interface="org.bangke.Candidate1",signal_name="Candidates")
+                            dbus_interface="org.bangke.Candidate1",signal_name="Candidates",
+                            bus_name="org.fcitx.Fcitx5",path="/bangke")
     log("已占住", SERVICE, "| layer-shell:", "开" if HAS_LAYER_SHELL else "关（降级为普通窗口）")
     log("面板版本:", PANEL_VERSION)
-    announce(agent)
-    # fcitx5 比我们晚起（或中途重启）时，它出现的那一刻再报一次到
-    bus.add_signal_receiver(
-        lambda *a: GLib.idle_add(announce, agent),
-        signal_name="NameOwnerChanged",
-        dbus_interface="org.freedesktop.DBus",
-        arg0=FcitxName,
-    )
+    def backend_changed(_name, _old, owner):
+        S["lookup_visible"] = False
+        S["preedit_visible"] = False
+        S["auxiliary_visible"] = False
+        panel.queue_refresh()
+        if owner: agent._call("Refresh")
+    bus.add_signal_receiver(backend_changed, signal_name="NameOwnerChanged",
+                            dbus_interface="org.freedesktop.DBus",arg0="org.fcitx.Fcitx5")
+    if bus.name_has_owner("org.fcitx.Fcitx5"): agent._call("Refresh")
     Gtk.main()
 
 

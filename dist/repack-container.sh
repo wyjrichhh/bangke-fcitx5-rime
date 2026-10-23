@@ -35,8 +35,8 @@ if [ ! -f /priv/build/src/rime-ai.so ] && [ ! -f /priv/build/rime-ai.so ]; then
   echo "!! 找不到 /priv/build 里的 rime-ai.so，先跑 build-22.04.sh" >&2
   exit 1
 fi
-if [ ! -x /priv/config-ui/build/fcitx5-rime-config ]; then
-  echo "!! 找不到 /priv/config-ui/build/fcitx5-rime-config，先跑 build-22.04.sh" >&2
+if [ ! -x /priv/config-ui/build/bangke-pinyin-config ]; then
+  echo "!! 找不到 /priv/config-ui/build/bangke-pinyin-config，先跑 build-22.04.sh" >&2
   exit 1
 fi
 
@@ -79,7 +79,7 @@ fi
 
 # 1.5) config-ui (Qt5) → /usr
 DESTDIR="$STAGE" cmake --install /priv/config-ui/build --prefix /usr >/dev/null 2>&1
-if [ ! -x "$STAGE/usr/bin/fcitx5-rime-config" ]; then
+if [ ! -x "$STAGE/usr/bin/bangke-pinyin-config" ]; then
   echo "!! config-ui 没有装进包里，打包中止" >&2
   exit 1
 fi
@@ -123,7 +123,7 @@ mkdir -p "$STAGE/etc/ld.so.conf.d"
 echo "$PRIVLIB" > "$STAGE/etc/ld.so.conf.d/fcitx5-rime-ai.conf"
 
 # 品牌名不在这里改 —— 它直接写在物料里（src/rime-ai.conf.in、src/rime-ai-addon.conf.in.in、
-# config-ui/data/fcitx5-rime-config.desktop、metainfo）。以前是打包时 sed 改，但 msgfmt 会拿
+# config-ui/data/bangke-pinyin-config.desktop、metainfo）。以前是打包时 sed 改，但 msgfmt 会拿
 # po 展开出 Name[zh_CN]=中州韵 这类本地化键，漏改一个键就漏上游文案出去（Comment 就这么漏过）。
 # 这里的 IM_NAME 只用来给「双击安装脚本」和 tar 起名。
 
@@ -135,7 +135,7 @@ cp -a /vendor/fonts/*.ttf /vendor/fonts/*.otf \
 # 6) DEBIAN 元数据
 mkdir -p "$STAGE/DEBIAN"
 # 我们的 addon 已经改名成 rime-ai，addon 自己的文件不再与发行版同名；但设置程序的
-# /usr/bin/fcitx5-rime-config 与 applications/*.desktop 仍与发行版 fcitx5-rime 同路径。
+# /usr/bin/bangke-pinyin-config 与 applications/*.desktop 仍与发行版 fcitx5-rime 同路径。
 # 不声明关系的话，dpkg 会把两份当独立文件互相覆盖：先装的被顶掉，后卸载的一方走后，
 # 另一方的文件也跟着没了。我们本来就是它的替代品，且共用同一个 rime 用户目录，
 # 所以明确取代、不共存。（注意：control 文件里不能写注释，说明只能放这儿。）
@@ -224,4 +224,4 @@ tar -C "$OUT" -cf "$OUT/${IM_NAME}-${VERSION}-linux-x64.tar" \
 echo "=== 产出 ==="
 ls -lh "${PKG}_${VERSION}_${ARCH}.deb" "$OUT/${IM_NAME}-安装.sh" "$OUT/${IM_NAME}-${VERSION}-linux-x64.tar"
 echo "=== 关键文件 ==="
-dpkg-deb -c "${PKG}_${VERSION}_${ARCH}.deb" 2>/dev/null | grep -E "fcitx5/rime-ai\.so$|librime\.so\.1\.|ai-predict\.so|ld\.so\.conf|model\.bin$|fcitx5-rime-config|seed/bangke.yaml"
+dpkg-deb -c "${PKG}_${VERSION}_${ARCH}.deb" 2>/dev/null | grep -E "fcitx5/bangke-ai\.so$|librime\.so\.1\.|ai-predict\.so|ld\.so\.conf|model\.bin$|bangke-pinyin-config|seed/bangke.yaml"

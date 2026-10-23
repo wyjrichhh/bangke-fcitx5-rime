@@ -21,14 +21,14 @@ Description=Bangke software update notifications
 PartOf=graphical-session.target
 After=graphical-session.target
 [Service]
-ExecStart=/usr/bin/fcitx5-rime-config --update-monitor
+ExecStart=/usr/bin/bangke-pinyin-config --update-monitor
 Restart=on-failure
 RestartSec=60
 EOF
 touch "$ROOT/usr/share/bangke-pinyin/$PLATFORM"
-# Both custom panels use Fcitx's Kimpanel UI, which doesn't enable its tray.
-# Reuse the same tray/menu bridge on both desktops.
-if [[ $PLATFORM == ubuntu || $PLATFORM == omarchy ]]; then
+# GNOME's legacy Kimpanel adapter needs a tray bridge. Omarchy retains its
+# original Fcitx UI and tray policy with the per-context private panel.
+if [[ $PLATFORM == ubuntu ]]; then
   bash "$REPO/panel-omarchy/tray/build.sh" "$ROOT"
 fi
 if [[ $PLATFORM == ubuntu ]]; then
@@ -59,6 +59,13 @@ ConditionEnvironment=WAYLAND_DISPLAY
 Type=oneshot
 ExecStart=/usr/lib/bangke-pinyin/session.sh install
 EOF
+  # Omarchy disables the standard SNI item. Restore its input-method menu
+  # independently of candidate rendering; never force a global UI backend.
+  cat > "$ROOT/usr/share/bangke-pinyin/20-bangke-tray.conf" <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/fcitx5 --enable notificationitem
+EOF
   cat > "$ROOT/usr/lib/systemd/user/bangke-panel.service" <<'EOF'
 [Unit]
 Description=Bangke candidate panel
@@ -79,10 +86,5 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/lib/bangke-pinyin/caret.sh
 ExecStop=/usr/lib/bangke-pinyin/caret.sh stop
-EOF
-  cat > "$ROOT/usr/share/bangke-pinyin/20-bangke-kimpanel.conf" <<'EOF'
-[Service]
-ExecStart=
-ExecStart=/usr/bin/fcitx5 --disable classicui --enable notificationitem,bangke-tray -u kimpanel
 EOF
 fi

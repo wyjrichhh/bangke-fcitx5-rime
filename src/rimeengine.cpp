@@ -97,10 +97,10 @@ public:
         RIME_STRUCT(RimeStatus, status);
         if (state->getStatus(&status)) {
             if (status.is_disabled) {
-                return "fcitx-rime-disabled";
+                return "fcitx-bangke-disable";
             }
         }
-        return "fcitx-rime-im";
+        return "fcitx-bangke-im";
     }
 
 private:
@@ -111,11 +111,11 @@ RimeEngine::RimeEngine(Instance *instance)
     : instance_(instance), api_(rime_get_api()),
       factory_([this](InputContext &ic) { return new RimeState(this, ic); }) {
     imAction_ = std::make_unique<IMAction>(this);
-    instance_->userInterfaceManager().registerAction("fcitx-rime-im",
+    instance_->userInterfaceManager().registerAction("fcitx-bangke-im",
                                                      imAction_.get());
     imAction_->setMenu(&schemaMenu_);
     eventDispatcher_.attach(&instance_->eventLoop());
-    deployAction_.setIcon("fcitx-rime-deploy");
+    deployAction_.setIcon("fcitx-bangke-deploy");
     deployAction_.setShortText(_("Deploy"));
     deployAction_.connect<SimpleAction::Activated>([this](InputContext *ic) {
         deploy();
@@ -124,10 +124,10 @@ RimeEngine::RimeEngine(Instance *instance)
             state->updateUI(ic, false);
         }
     });
-    instance_->userInterfaceManager().registerAction("fcitx-rime-deploy",
+    instance_->userInterfaceManager().registerAction("fcitx-bangke-deploy",
                                                      &deployAction_);
 
-    syncAction_.setIcon("fcitx-rime-sync");
+    syncAction_.setIcon("fcitx-bangke-sync");
     syncAction_.setShortText(_("Synchronize"));
 
     syncAction_.connect<SimpleAction::Activated>([this](InputContext *ic) {
@@ -137,15 +137,15 @@ RimeEngine::RimeEngine(Instance *instance)
             state->updateUI(ic, false);
         }
     });
-    instance_->userInterfaceManager().registerAction("fcitx-rime-sync",
+    instance_->userInterfaceManager().registerAction("fcitx-bangke-sync",
                                                      &syncAction_);
 
-    configAction_.setIcon("fcitx-rime-deploy");
+    configAction_.setIcon("fcitx-bangke-deploy");
     configAction_.setShortText(_("Rime Settings"));
     configAction_.connect<SimpleAction::Activated>([](InputContext *) {
-        startProcess({"fcitx5-rime-config"});
+        startProcess({"bangke-pinyin-config"});
     });
-    instance_->userInterfaceManager().registerAction("fcitx-rime-config",
+    instance_->userInterfaceManager().registerAction("fcitx-bangke-config",
                                                      &configAction_);
     reloadConfig();
 }
@@ -172,7 +172,7 @@ void RimeEngine::rimeStart(bool fullcheck) {
 
     auto userDir = stringutils::joinPath(
         StandardPath::global().userDirectory(StandardPath::Type::PkgData),
-        "rime");
+        "bangke");
     if (!fs::makePath(userDir)) {
         if (!fs::isdir(userDir)) {
             RIME_ERROR() << "Failed to create user directory: " << userDir;
@@ -182,10 +182,10 @@ void RimeEngine::rimeStart(bool fullcheck) {
 
     RIME_STRUCT(RimeTraits, fcitx_rime_traits);
     fcitx_rime_traits.shared_data_dir = sharedDataDir;
-    fcitx_rime_traits.app_name = "rime.fcitx-rime";
+    fcitx_rime_traits.app_name = "rime.fcitx-bangke";
     fcitx_rime_traits.user_data_dir = userDir.c_str();
     fcitx_rime_traits.distribution_name = "Rime";
-    fcitx_rime_traits.distribution_code_name = "fcitx-rime";
+    fcitx_rime_traits.distribution_code_name = "fcitx-bangke";
     fcitx_rime_traits.distribution_version = FCITX_RIME_VERSION;
 
 #ifdef FCITX_RIME_LOAD_PLUGIN
@@ -298,12 +298,13 @@ void RimeEngine::updateConfig() {
 #endif
 
     rimeStart(false);
-    instance_->inputContextManager().registerProperty("rimeState", &factory_);
+    instance_->inputContextManager().registerProperty("bangkeState", &factory_);
     updateSchemaMenu();
 }
 void RimeEngine::activate(const InputMethodEntry &entry,
                            InputContextEvent &event) {
     // 菜单文字跟 IM 注册名走（inputmethod/rime-ai.conf 的 Name=），改名不必动这里。
+    panel_.activate(event.inputContext());
     configAction_.setShortText(entry.name() + " 设置");
     event.inputContext()->statusArea().addAction(StatusGroup::InputMethod,
                                                  imAction_.get());
@@ -323,6 +324,8 @@ void RimeEngine::deactivate(const InputMethodEntry &entry,
         state->commitPreedit(inputContext);
     }
     reset(entry, event);
+    panel_.hide();
+    event.inputContext()->inputPanel().setCustomInputPanelCallback({});
 }
 void RimeEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
     FCITX_UNUSED(entry);
@@ -380,7 +383,7 @@ void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
     const char *message = nullptr;
     const char *icon = "";
     if (messageType == "deploy") {
-        icon = "fcitx-rime-deploy";
+        icon = "fcitx-bangke-deploy";
         // 正文里不写引擎名 —— 名字由标题带（见下面 showTip 的 displayName()），
         // 上游那三句 _("Rime ...") 会把这个品牌名顶掉。
         if (messageValue == "start") {
@@ -393,7 +396,7 @@ void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
                         "See /tmp/rime.fcitx.ERROR for details.");
         }
     } else if (messageType == "option") {
-        icon = "fcitx-rime";
+        icon = "fcitx-bangke";
         if (messageValue == "!full_shape") {
             message = _("Half Shape is enabled.");
         } else if (messageValue == "full_shape") {
@@ -417,13 +420,14 @@ void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
     auto notifications = this->notifications();
     if (message && notifications) {
         const auto name = displayName();
-        notifications->call<INotifications::showTip>("fcitx-rime-deploy", name,
+        notifications->call<INotifications::showTip>("fcitx-bangke-deploy", name,
                                                      icon, name, message, -1);
     }
     timeEvent_ = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
         [this](EventSourceTime *, uint64_t) {
-            if (auto *ic = instance_->lastFocusedInputContext()) {
+            if (auto *ic = instance_->lastFocusedInputContext();
+                ic && ic->hasFocus() && instance_->inputMethod(ic) == "rime-ai") {
                 imAction_->update(ic);
                 ic->updateUserInterface(UserInterfaceComponent::StatusArea);
             }
@@ -446,6 +450,9 @@ void RimeEngine::handleReservedProperty(RimeSessionId session,
     if (key == reservedproperty::kRefreshUI) {
         instance_->inputContextManager().foreach(
             [this, session](InputContext *ic) {
+                if (!ic->hasFocus() || instance_->inputMethod(ic) != "rime-ai") {
+                    return true;
+                }
                 if (auto *state = this->state(ic)) {
                     if (state->session() == session) {
                         // 异步刷新：不清空面板，只重拉内容（见 rimestate.h）。
@@ -564,11 +571,15 @@ void RimeEngine::nudgeComposition(RimeSessionId session) {
     // RefreshNonConfirmedComposition() —— 那次重排会重跑 Query，缓存里已经有
     // 结果就把 AI 候选交出来，同时把 pending 清掉，泵下一拍自然停。mac 用
     // soft_cursor 同理。
-    api_->set_option(session, "soft_cursor",
-                     api_->get_option(session, "soft_cursor"));
     instance_->inputContextManager().foreach([this, session](InputContext *ic) {
+        if (!ic->hasFocus() || instance_->inputMethod(ic) != "rime-ai") {
+            return true;
+        }
         if (auto *state = this->state(ic)) {
             if (state->session() == session) {
+                // A delayed AI result must not update another input method's panel.
+                api_->set_option(session, "soft_cursor",
+                                 api_->get_option(session, "soft_cursor"));
                 // 异步刷新：不清面板、不清注释（见 rimestate.h）。
                 state->updateUI(ic, /*keyRelease=*/false,
                                 /*clearReservedComments=*/false,
@@ -607,7 +618,7 @@ std::string RimeEngine::subModeLabelImpl(const InputMethodEntry &,
 
 std::string RimeEngine::subModeIconImpl(const InputMethodEntry &,
                                         InputContext &ic) {
-    std::string result = "fcitx-rime";
+    std::string result = "fcitx-bangke";
     if (!api_ || !factory_.registered()) {
         return result;
     }
@@ -615,11 +626,11 @@ std::string RimeEngine::subModeIconImpl(const InputMethodEntry &,
     RIME_STRUCT(RimeStatus, status);
     if (state->getStatus(&status)) {
         if (status.is_disabled) {
-            result = "fcitx-rime-disable";
+            result = "fcitx-bangke-disable";
         } else if (status.is_ascii_mode) {
-            result = "fcitx-rime-latin";
+            result = "fcitx-bangke-latin";
         } else {
-            result = "fcitx-rime";
+            result = "fcitx-bangke";
         }
         api_->free_status(&status);
     }

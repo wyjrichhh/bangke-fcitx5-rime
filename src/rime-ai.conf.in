@@ -1,6 +1,6 @@
 [InputMethod]
 Name=蚌壳拼音
-Icon=fcitx-rime
+Icon=fcitx-bangke
 Label=蚌
 LangCode=zh
 Addon=rime-ai

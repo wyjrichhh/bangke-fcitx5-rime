@@ -23,7 +23,37 @@ def profile(text, remove=False, target_name="rime-ai"):
         if match:
             name = next((x.strip()[5:] for x in lines if x.startswith('Name=')), '')
             items.setdefault(match[1], []).append(name)
-    if not remove and any('rime-ai' in names for names in items.values()): return text
+    if not remove and any('rime-ai' in names for names in items.values()):
+        # Older settings templates put Bangke in slot zero. Fcitx treats that
+        # slot as the inactive keyboard, so menu activation must never use it.
+        for group in items:
+            entries = []
+            for section in sections:
+                match = re.fullmatch(r'\[Groups/' + group + r'/Items/(\d+)\]', section[0])
+                if match:
+                    name = next((line.strip()[5:] for line in section[1] if line.startswith('Name=')), '')
+                    entries.append((int(match[1]), name, section))
+            first = next((section for index, name, section in entries if index == 0 and name == 'rime-ai'), None)
+            if first is None: continue
+            keyboard = next(((index, section) for index, name, section in sorted(entries, key=lambda row: row[0]) if name.startswith('keyboard-')), None)
+            if keyboard:
+                index, section = keyboard
+                first[0] = f'[Groups/{group}/Items/{index}]'
+                first[1][0] = first[0] + '\n'
+                section[0] = f'[Groups/{group}/Items/0]'
+                section[1][0] = section[0] + '\n'
+            else:
+                for index, name, section in entries:
+                    section[0] = f'[Groups/{group}/Items/{index+1}]'
+                    section[1][0] = section[0] + '\n'
+                root = next((lines for header, lines in sections if header == f'[Groups/{group}]'), [])
+                layout = next((line.split('=', 1)[1].strip() for line in root if line.startswith('Default Layout=')), 'us') or 'us'
+                header = f'[Groups/{group}/Items/0]'
+                entry = [header, [header+'\n', f'Name=keyboard-{layout}\n', 'Layout=\n', '\n']]
+                offset = next((i for i, section in enumerate(sections) if section[0] == '[GroupOrder]'), len(sections))
+                sections.insert(offset, entry)
+        return ''.join(''.join(lines) for _, lines in sections)
+
     if not remove:
         groups = [re.fullmatch(r'\[Groups/(\d+)\]', h) for h, _ in sections]
         group = next((m[1] for m in groups if m), None)
@@ -80,27 +110,16 @@ def main():
     data = pathlib.Path(os.environ.get('XDG_DATA_HOME', home / '.local/share'))
     path = config / 'fcitx5/profile'
     before = path.read_text() if path.exists() else ''
-    legacy = data / 'bangke-pinyin/legacy-migrated'
-    old_addon_gone = not pathlib.Path('/usr/share/fcitx5/inputmethod/rime.conf').exists()
-    if args.action == 'install' and (old_addon_gone or pathlib.Path('/var/lib/bangke-pinyin/migrate-rime').exists()) and not legacy.exists():
-        # Migrate a replaced addon, or a legacy addon proven Bangke-branded by pre-upgrade.
-        before_migration = before
-        if re.search(r'(?m)^Name=rime-ai$', before):
-            before = re.sub(r'(?m)^DefaultIM=rime$', 'DefaultIM=rime-ai', before)
-            before = profile(before, remove=True, target_name='rime')
-        else:
-            before = re.sub(r'(?m)^(Name|DefaultIM)=rime$', r'\1=rime-ai', before)
-        if before != before_migration:
-            shutil.copyfile(path, path.with_suffix('.bangke-legacy-backup'))
-            atomic(path, before)
-        legacy.parent.mkdir(parents=True, exist_ok=True)
-        legacy.touch()
     after = profile(before, args.action == 'remove')
     if before != after:
         if path.exists(): shutil.copyfile(path, path.with_suffix('.bangke-backup'))
         atomic(path, after)
     if args.action == 'install':
-        synchronize(args.seed, data / 'fcitx5/rime', data / 'bangke-pinyin/seed-manifest.json')
+        destination = data / 'fcitx5/bangke'
+        legacy = data / 'fcitx5/rime'
+        if not destination.exists() and (legacy / 'bangke.yaml').is_file():
+            shutil.copytree(legacy, destination, ignore=shutil.ignore_patterns('build'))
+        synchronize(args.seed, destination, data / 'bangke-pinyin/seed-manifest.json')
     if args.ubuntu:
         selection = data / 'bangke-pinyin/input-framework.json'
         xinput = home / '.xinputrc'

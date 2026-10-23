@@ -2,9 +2,9 @@
 
 ## 组件
 
-- `panel.py`：GTK3 / Pango / Cairo 绘制，通过标准 kimpanel D-Bus 协议接收候选、翻页和点击操作。蚌壳专用信号提供独立注释与组合输入生命周期。
+- `panel.py`：GTK3 / Pango / Cairo 绘制，通过专属 D-Bus 名称 `org.bangke.Panel` 接收蚌壳候选，点击和翻页只发给 `/bangke/panel`。蚌壳专用信号提供独立注释与组合输入生命周期。
 - `hyprland-caret-plugin/caretshim.cpp`：读取 Hyprland 中的真实输入光标位置，提供面板毛玻璃开关，并禁用候选窗口动画。
-- `tray/`：独立启用 Fcitx5 的 StatusNotifierItem，保留托盘和设置入口。
+- `tray/`：供 GNOME 的 Kimpanel 集成使用；Omarchy 不加载此桥接，由 Classic UI 启用标准 StatusNotifierItem，恢复输入法切换菜单。
 - `themes/`：23 个 Omarchy 配色定义及原始许可证。系统和用户安装的同名主题优先于内置目录。
 
 ## 布局与绘制
@@ -23,10 +23,20 @@ Qt 解析 YAML 并输出版本化外观 JSON，供设置预览与运行面板共
 
 统一通过 `dist/build-arch.sh` 打包并由 pacman 安装，不再支持旧实验安装脚本。`dist/lifecycle/` 管理用户注册、种子数据同步、服务及卸载。`migrate-experiment.py` 是必要的升级兼容代码，只回收已知旧实验启动项，不能当临时诊断脚本删除。
 
+安装不强制设置全局 UI，也不修改其他输入法的候选皮肤。Omarchy 默认禁用了标准托盘；安装通过独立的 `20-bangke-tray.conf` 启用 `notificationitem`，让菜单同时列出蚌壳和其他输入法，卸载时回收此覆盖。Fcitx5 的单上下文回调只为 `rime-ai` 绘制蚌壳候选；其他输入法和要求客户端绘制候选的应用继续使用原有路径。面板停止时自动恢复原有 UI，当前组合输入不丢失。升级会移除旧版写入的 `20-bangke-kimpanel.conf`。此独立路径通过 Arch 构建的 `BANGKE_PRIVATE_PANEL=ON` 启用，要求 Fcitx5 5.1.2 以上；GNOME 适配不在此次 Omarchy 修复范围内。
+
 服务为 `bangke-panel.service`、`bangke-caret.service` 和 `bangke-session.service`。Hyprland 插件在用户机器使用匹配的头文件编译，加载前检查 ABI；升级 Hyprland 后需要重新登录。已验证版本为 Hyprland 0.56.2。
 
 ## 验证
 
-`test-appearance.py` 检查真实绘制像素及完整长文本；`test-stability.py` 检查组合输入定位和布局；`test-live-settings.py`、`test-theme-switch.py` 使用独立 D-Bus 与 Xvfb 检查真实 GTK / Qt 协作；`tray/test-registration.py` 检查标准托盘注册。`render-reference.py` 可生成六种高亮参考图，产物不提交。
+`test-appearance.py` 检查真实绘制像素及完整长文本；`test-stability.py` 检查组合输入定位和布局；`test-live-settings.py`、`test-theme-switch.py` 使用独立 D-Bus 与 Xvfb 检查真实 GTK / Qt 协作（可设置 `BANGKE_TEST_DISPLAY` 使用现有 XWayland）；`test-isolation.py` 在真实桌面检查原生/蚌壳窗口归属、点击翻页、失焦及面板停止/恢复；`tray/test-registration.py` 检查标准托盘注册。`render-reference.py` 可生成六种高亮参考图，产物不提交。
 
 完整命令见 [LINUX_BUILD.md](../LINUX_BUILD.md)。运行时问题首先检查 `journalctl --user -u bangke-panel -u bangke-caret` 和 `~/.cache/bangke-pinyin/setup.log`。
+
+## 切换提示与升级兼容
+
+方案及输入法切换提示使用私有面板的辅助信息通道。Fcitx5 5.1.22 及以上的 `overlayMessage` 仅在没有组合输入内容时显示；旧版本读取辅助信息区。提示随 Fcitx5 的计时器消失，失焦、切换到其他输入法或后端断开时隐藏。
+
+升级会移除旧包的全局 Kimpanel 启动覆盖，并保留用户的 Classic UI 皮肤。此迁移只处理已知的旧包配置，不覆盖任意手动启动参数，也不会重新安装曾被旧包替换移除的其他输入法。
+
+Omarchy 支持范围为独立候选面板和标准托盘；GNOME 使用独立的适配实现。发布验收需覆盖 XWayland 与原生 Wayland 应用，原生 Wayland 应使用真实键盘事件检查组合输入和提交，不能用合成快捷键代替输入协议链路。

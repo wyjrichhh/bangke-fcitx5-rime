@@ -43,6 +43,8 @@ int main(int argc, char** argv) {
   QString t = read(profile());
   check(t.contains("Name=rime-ai") && t.contains("DefaultIM=rime-ai"), "全新用户建模板");
   check(beforeGroupOrder(t), "rime 在 [GroupOrder] 之前");
+  check(t.contains("[Groups/0/Items/0]\nName=keyboard-us") &&
+        t.contains("[Groups/0/Items/1]\nName=rime-ai"), "首项为键盘，蚌壳可正常激活");
 
   // 2) 幂等
   const QString once = t;

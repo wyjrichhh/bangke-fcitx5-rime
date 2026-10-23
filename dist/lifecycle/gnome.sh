@@ -27,7 +27,7 @@ fi
 mkdir -p "$CONFIG"
 TEMP=$(mktemp "$CONFIG/.appearance.XXXXXX")
 trap 'rm -f "$TEMP"' EXIT
-if BANGKE_PANEL_BACKEND=gnome QT_QPA_PLATFORM=offscreen fcitx5-rime-config --dump-panel-appearance > "$TEMP"; then
+if BANGKE_PANEL_BACKEND=gnome QT_QPA_PLATFORM=offscreen bangke-pinyin-config --dump-panel-appearance > "$TEMP"; then
   python3 - "$TEMP" <<'PY'
 import json, sys
 with open(sys.argv[1]) as f:

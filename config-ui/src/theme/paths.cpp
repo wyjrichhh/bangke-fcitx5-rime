@@ -57,7 +57,7 @@ QString omarchyThemeDir() {
   return QFileInfo::exists(legacy + QStringLiteral("/colors.toml")) ? legacy : state;
 }
 
-QString rimeUserDir() { return dataHome() + QStringLiteral("/fcitx5/rime"); }
+QString rimeUserDir() { return dataHome() + QStringLiteral("/fcitx5/bangke"); }
 
 QString sharedBangkeYaml() {
   return rimeUserDir() + QStringLiteral("/bangke.yaml");

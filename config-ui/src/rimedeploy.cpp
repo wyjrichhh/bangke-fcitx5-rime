@@ -5,6 +5,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
 #include <QDBusError>
 #include <QDBusInterface>
 #include <QDBusMessage>
@@ -40,11 +41,11 @@ QString RimeDeploy::setAddonConfig(const QString& addon, const QVariantMap& valu
   return QString();
 }
 
-// rime addon 通过自己的 DBus 接口 org.fcitx.Fcitx.Rime1（/rime）暴露 Deploy 方法，
+// rime addon 通过自己的 DBus 接口 org.fcitx.Fcitx.Bangke1（/rime）暴露 Deploy 方法，
 // 直接调 RimeEngine::deploy() 做 fullcheck 重建（rimeservice.cpp）。失败时兜底提示。
 QString RimeDeploy::triggerDeploy() {
-  QDBusInterface iface(QStringLiteral("org.fcitx.Fcitx5"), QStringLiteral("/rime"),
-                       QStringLiteral("org.fcitx.Fcitx.Rime1"),
+  QDBusInterface iface(QStringLiteral("org.fcitx.Fcitx5"), QStringLiteral("/bangke"),
+                       QStringLiteral("org.fcitx.Fcitx.Bangke1"),
                        QDBusConnection::sessionBus());
   if (!iface.isValid()) {
     return QStringLiteral("未检测到运行中的 fcitx5，请启动输入法后重试，或切换输入法使配置生效。");
@@ -92,9 +93,12 @@ QString RimeDeploy::addonConfigDump(const QString& addon, const QStringList& key
 
 namespace {
 QDBusMessage panelCall(const QString& method, const QVariantList& args = {}) {
+  const bool privatePanel = QFileInfo::exists(QStringLiteral("/usr/share/bangke-pinyin/omarchy")) ||
+      qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel" ||
+      QDBusConnection::sessionBus().interface()->isServiceRegistered(QStringLiteral("org.bangke.Panel"));
   auto message = QDBusMessage::createMethodCall(
-      QStringLiteral("org.kde.impanel"), QStringLiteral("/org/kde/impanel"),
-      QStringLiteral("org.kde.impanel2"), method);
+      privatePanel ? QStringLiteral("org.bangke.Panel") : QStringLiteral("org.kde.impanel"), privatePanel ? QStringLiteral("/org/bangke/Panel") : QStringLiteral("/org/kde/impanel"),
+      privatePanel ? QStringLiteral("org.bangke.Panel1") : QStringLiteral("org.kde.impanel2"), method);
   message.setArguments(args);
   return QDBusConnection::sessionBus().call(message, QDBus::Block, 2000);
 }
@@ -115,7 +119,8 @@ void RimeDeploy::ensurePanel() {
 }
 
 bool RimeDeploy::usesCustomPanel() {
-  if (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel") return true;
+  if (qgetenv("BANGKE_PANEL_BACKEND") == "kimpanel" ||
+      QFileInfo::exists(QStringLiteral("/usr/share/bangke-pinyin/omarchy"))) return true;
   const auto reply = panelCall(QStringLiteral("GetPanelIdentity"));
   if (reply.type() == QDBusMessage::ReplyMessage)
     return reply.arguments().value(0).toString().startsWith(QStringLiteral("bangke-panel:"));

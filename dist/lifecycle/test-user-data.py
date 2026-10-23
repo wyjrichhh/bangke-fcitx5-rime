@@ -60,3 +60,18 @@ both = installed + '\n[Groups/0/Items/8]\nName=rime\nLayout=\n'
 merged = m.profile(both, remove=True, target_name='rime')
 assert merged.count('Name=rime-ai') == 1 and '\nName=rime\n' not in merged
 print('PASS: idempotent registration, multi-group removal, defaults/layout preservation, seed update and user-data retention')
+
+# Repair the exact legacy Bangke-first template without changing other IM data.
+import configparser
+legacy = '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=rime\n[Groups/0/Items/0]\nName=rime-ai\nLayout=tw\nExtra=keep\n[Groups/0/Items/1]\nName=keyboard-us\nLayout=us\n[Groups/0/Items/2]\nName=rime\nLayout=\n[GroupOrder]\n0=Default\n'
+repaired = m.profile(legacy)
+cfg=configparser.ConfigParser();cfg.read_string(repaired)
+assert cfg['Groups/0/Items/0']['Name']=='keyboard-us'
+assert cfg['Groups/0/Items/1']['Name']=='rime-ai'
+assert cfg['Groups/0/Items/1']['Layout']=='tw' and cfg['Groups/0/Items/1']['Extra']=='keep'
+assert cfg['Groups/0']['DefaultIM']=='rime' and cfg['Groups/0/Items/2']['Name']=='rime'
+assert m.profile(repaired)==repaired
+single='[Groups/3]\nName=Single\nDefault Layout=de\nDefaultIM=rime-ai\n[Groups/3/Items/0]\nName=rime-ai\nLayout=\n[GroupOrder]\n0=Single\n'
+cfg.read_string(m.profile(single))
+assert cfg['Groups/3/Items/0']['Name']=='keyboard-de' and cfg['Groups/3/Items/1']['Name']=='rime-ai'
+print('PASS: legacy Bangke-first profiles restore keyboard slot zero; defaults, layouts and unknown keys preserved')
