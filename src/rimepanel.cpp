@@ -143,6 +143,12 @@ void RimePanel::update(InputContext *ic) {
             auxiliaryText += '\n';
         auxiliaryText += input.auxDown().toString();
     }
+#ifdef BANGKE_OVERLAY_MESSAGE
+    // Fcitx 5.1.22 moved temporary IM information out of the normal aux fields.
+    // Match Classic UI: overlays are only visible when the input panel is empty.
+    if (input.empty())
+        auxiliaryText = input.overlayMessage().toString();
+#endif
     auto auxiliary = call("UpdateAuxiliaryText");
     auxiliary << auxiliaryText;
     auxiliary.send();

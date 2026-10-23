@@ -11,7 +11,7 @@
 #     sudo pacman -U bangke-pinyin-*.pkg.tar.zst
 pkgname=bangke-pinyin
 pkgver=5.0.19
-pkgrel=22
+pkgrel=23
 pkgdesc='蚌壳拼音 —— 基于 Rime 的 fcitx5 输入法（含 CTranslate2 AI 预测）'
 arch=('aarch64' 'x86_64')
 url='https://bangke.ai'
