@@ -135,6 +135,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
     : PageScaffold(QStringLiteral("外观"), QStringLiteral("配色、字体与候选面板"),
                    parent),
       config_(config) {
+  legacyHighlightCorner_ = style.hilitedCornerRadius;
   customPanel_ = RimeDeploy::usesCustomPanel() || config.platform().source == ThemeSource::Omarchy;
   preview_ = new PreviewStrip(this);
   preview_->enableSampleSelection();
@@ -229,10 +230,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
 
   if (customPanel_) {
     borderHeight_ = new SliderRow(QStringLiteral("边框高度"), QStringLiteral("与边框宽度取较小值作为描边粗细；0 关闭描边。"), 0, 20, 1, qMax(0, style.borderHeight), QStringLiteral(" pt"), this);
-    highlightCorner_ = new SliderRow(QStringLiteral("高亮圆角"), QStringLiteral("当前连续贴边高亮使用直角内部边界，此参数暂不生效。"), 0, 30, 1, style.hilitedCornerRadius, QStringLiteral(" pt"), this);
 
-    highlightCorner_->setEnabled(false);
-    highlightCorner_->setToolTip(QStringLiteral("当前面板采用贴边连续高亮，内部边界固定为直角；此参数暂不生效。"));
     lineSpacing_ = new SliderRow(QStringLiteral("行间距"), QString(), -10, 30, 1, style.lineSpacing, QStringLiteral(" pt"), this);
     spacing_ = new SliderRow(QStringLiteral("预编辑间距"), QStringLiteral("拼音显示在面板时，与候选之间的距离。"), -10, 30, 1, style.spacing, QStringLiteral(" pt"), this);
     inlinePreedit_ = new ToggleRow(QStringLiteral("在输入框中显示预编辑"), QStringLiteral("关闭后拼音显示在候选面板顶部。"), style.inlinePreedit, this);
@@ -261,7 +259,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   addSection(QStringLiteral("更多外观选项"), true);
   const QList<QWidget*> advanced{
       schemeDark_, transparency_, customPanel_ ? orientation_ : nullptr,
-      shadow_, border_, borderHeight_, highlightCorner_, lineSpacing_, spacing_,
+      shadow_, border_, borderHeight_, lineSpacing_, spacing_,
       inlinePreedit_, inlineCandidate_, memorizeSize_, translucency_, mutualExclusive_,
       candidateFormat_, showPaging_};
   for (auto* row : advanced) if (row) addRow(row);
@@ -291,7 +289,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   }
 
   if (customPanel_) {
-    for (auto* row : {borderHeight_, highlightCorner_, lineSpacing_, spacing_})
+    for (auto* row : {borderHeight_, lineSpacing_, spacing_})
       connect(row, &SliderRow::valueChanged, this, [notify](double) { notify(); });
     for (auto* row : {inlinePreedit_, inlineCandidate_, memorizeSize_, mutualExclusive_, translucency_})
       connect(row->toggle(), &QAbstractButton::toggled, this, [notify](bool) { notify(); });
@@ -317,7 +315,7 @@ StyleOptions AppearancePage::style() const {
   if (customPanel_) {
     out.candidateListLayout = candidateLayout_->currentValue();
     out.borderHeight = int(borderHeight_->value());
-    out.hilitedCornerRadius = int(highlightCorner_->value());
+    out.hilitedCornerRadius = legacyHighlightCorner_;
     out.lineSpacing = int(lineSpacing_->value());
     out.spacing = int(spacing_->value());
     out.inlinePreedit = inlinePreedit_->isChecked();
@@ -344,7 +342,7 @@ void AppearancePage::setStyle(const StyleOptions& style) {
   if (customPanel_) {
     candidateLayout_->setCurrentValue(style.candidateListLayout);
     borderHeight_->setValue(qMax(0, style.borderHeight));
-    highlightCorner_->setValue(style.hilitedCornerRadius);
+    legacyHighlightCorner_ = style.hilitedCornerRadius;
     lineSpacing_->setValue(style.lineSpacing);
     spacing_->setValue(style.spacing);
     inlinePreedit_->setChecked(style.inlinePreedit);
@@ -654,6 +652,7 @@ SchemasPage::SchemasPage(const RimeData& data, QWidget* parent)
       layout->addWidget(userDict);
     }
     auto* simplified = new QComboBox(row);
+    configureComboBox(simplified);
     simplified->addItem(QStringLiteral("简体"));
     simplified->addItem(QStringLiteral("繁体"));
     simplified->setCurrentIndex(schema.simplified ? 0 : 1);

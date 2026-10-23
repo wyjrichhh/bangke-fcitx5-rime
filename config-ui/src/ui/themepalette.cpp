@@ -148,14 +148,24 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 QComboBox {
   background: %4; border: 1px solid %5; border-radius: 6px;
-  padding: 5px 10px; min-height: 20px;
+  padding: 0 28px 0 10px; min-height: 32px; max-height: 32px;
 }
 QComboBox:hover { background: %6; }
-QComboBox::drop-down { border: none; width: 18px; }
-QComboBox QAbstractItemView {
-  background: %4; border: 1px solid %5; border-radius: 6px;
+QComboBox::drop-down { background: transparent; border: none; width: 24px; }
+QAbstractItemView#settingsComboPopup {
+  background: %4; color: %1; border: 1px solid %5; border-radius: 6px;
+  padding: 0; margin: 0;
   selection-background-color: %7; selection-color: %8; outline: none;
 }
+QWidget#settingsComboViewport { background: %4; color: %1; }
+QFrame#settingsComboContainer {
+  background: %4; color: %1; border: none; padding: 0; margin: 0;
+}
+QAbstractItemView#settingsComboPopup::item {
+  min-height: 30px; padding: 0 10px; margin: 0; border: none; border-radius: 3px;
+}
+QAbstractItemView#settingsComboPopup::item:hover { background: %6; color: %1; }
+QAbstractItemView#settingsComboPopup::item:selected { background: %7; color: %8; }
 QLineEdit {
   background: %4; border: 1px solid %5; border-radius: 6px; padding: 8px 12px;
 }

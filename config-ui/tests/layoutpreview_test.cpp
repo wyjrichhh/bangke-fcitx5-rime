@@ -18,6 +18,8 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QToolButton>
+#include <QAbstractItemView>
+#include <QStyle>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
@@ -131,8 +133,9 @@ int main(int argc, char** argv) {
       slider(QString::fromUtf8(name));
     slider(QStringLiteral("边框宽度"), true);
     slider(QStringLiteral("边框高度"), true);
-    require(!setting(page, QStringLiteral("高亮圆角"))->isEnabled(),
-            "Unsupported highlight radius must not appear editable");
+    for (auto* child : page.findChildren<QWidget*>())
+      require(child->property("settingLabel").toString() != QStringLiteral("高亮圆角"),
+              "Redundant highlight radius control must be absent");
     for (const auto& name : {"候选排列", "文字方向"}) {
       check(QString::fromUtf8(name), [&] {
         auto* control = setting(page, QString::fromUtf8(name))->findChild<QComboBox*>();
@@ -233,6 +236,25 @@ int main(int argc, char** argv) {
     MainWindow window;
     window.show();
     app.processEvents();
+    for (auto* combo : window.findChildren<QComboBox*>()) {
+      require(combo->size() == QSize(220, 34), QStringLiteral("Dropdown %1 dimensions: %2 x %3; min %4 x %5, max %6 x %7").arg(combo->currentText()).arg(combo->width()).arg(combo->height()).arg(combo->minimumWidth()).arg(combo->minimumHeight()).arg(combo->maximumWidth()).arg(combo->maximumHeight()));
+      require(!combo->style()->styleHint(QStyle::SH_ComboBox_Popup, nullptr, combo),
+              "Native menu sizing must not override bounded dropdown lists");
+      require(combo->view()->objectName() == QStringLiteral("settingsComboPopup"),
+              "Every dropdown popup must use the shared theme");
+      require(combo->view()->maximumHeight() <= 322, "Dropdown list height must be bounded");
+      require(combo->view()->window()->objectName() == QStringLiteral("settingsComboContainer"),
+              "Popup frames must use the same theme as their viewports");
+      const auto frame = combo->grab().toImage();
+      const auto background = platform.window;
+      const auto foreground = platform.text;
+      const QColor expected(qRound(background.red() * .965 + foreground.red() * .035),
+                            qRound(background.green() * .965 + foreground.green() * .035),
+                            qRound(background.blue() * .965 + foreground.blue() * .035));
+      const auto ratio = frame.devicePixelRatio();
+      require(frame.pixelColor(qRound(3 * ratio), qRound(17 * ratio)).rgb() == expected.rgb(),
+              "Dropdown field background must follow the current settings theme");
+    }
     auto* navigation = window.findChild<QTabBar*>("pageNavigation");
     require(navigation && navigation->count() == 5, "Missing top navigation");
     const auto center = navigation->mapTo(&window, navigation->rect().center());

@@ -69,7 +69,8 @@ class AppearancePage : public PageScaffold {
   SliderRow* shadow_ = nullptr;
   SliderRow* border_ = nullptr;
   SliderRow* borderHeight_ = nullptr;
-  SliderRow* highlightCorner_ = nullptr;
+  // Keep the hidden legacy value unchanged when saving existing configurations.
+  int legacyHighlightCorner_ = 0;
   SliderRow* lineSpacing_ = nullptr;
   SliderRow* spacing_ = nullptr;
   ToggleRow* inlinePreedit_ = nullptr;

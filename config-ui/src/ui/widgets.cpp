@@ -5,6 +5,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLineEdit>
+#include <QListView>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPropertyAnimation>
@@ -14,6 +15,7 @@
 #include <QStyledItemDelegate>
 #include <QToolButton>
 #include <QStyle>
+#include <QStyleFactory>
 #include <QVBoxLayout>
 
 #include "ui/themepalette.h"
@@ -199,6 +201,34 @@ void SliderRow::updateText() {
   value_->setText(text + suffix_);
 }
 
+void configureComboBox(QComboBox* combo) {
+  // GTK menu geometry ignores maxVisibleItems and may animate independently of QSS.
+  // Scope a stable widget style to the combo; colors still come from the app theme.
+  auto* style = QStyleFactory::create(QStringLiteral("Fusion"));
+  style->setParent(combo);
+  combo->setStyle(style);
+  combo->setFixedSize(220, 34);
+  combo->setMaxVisibleItems(10);
+  combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  combo->setMinimumContentsLength(12);
+  auto* view = combo->view();
+  view->setObjectName(QStringLiteral("settingsComboPopup"));
+  view->viewport()->setObjectName(QStringLiteral("settingsComboViewport"));
+  auto* popup = view->window();
+  popup->setObjectName(QStringLiteral("settingsComboContainer"));
+  popup->setAttribute(Qt::WA_StyledBackground);
+  auto* popupStyle = QStyleFactory::create(QStringLiteral("Fusion"));
+  popupStyle->setParent(popup);
+  popup->setStyle(popupStyle);
+  popup->setContentsMargins(0, 0, 0, 0);
+  if (popup->layout()) popup->layout()->setContentsMargins(0, 0, 0, 0);
+  view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  view->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  view->setMinimumHeight(0);
+  view->setMaximumHeight(322);
+  if (auto* list = qobject_cast<QListView*>(view)) list->setUniformItemSizes(true);
+}
+
 ComboRow::ComboRow(const QString& label, const QString& hint,
                    const QStringList& items, const QStringList& values,
                    const QString& current, QWidget* parent)
@@ -207,12 +237,7 @@ ComboRow::ComboRow(const QString& label, const QString& hint,
   for (int i = 0; i < items.size(); ++i) {
     combo_->addItem(items.at(i), i < values.size() ? values.at(i) : items.at(i));
   }
-  combo_->setMaxVisibleItems(10);
-  combo_->view()->setMaximumHeight(320);
-  combo_->setMinimumWidth(156);
-  combo_->setMaximumWidth(220);
-  combo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-  combo_->setMinimumContentsLength(9);
+  configureComboBox(combo_);
   if (auto* shell = qobject_cast<QHBoxLayout*>(this->layout()))
     shell->addWidget(combo_);
   setCurrentValue(current);

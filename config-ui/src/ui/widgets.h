@@ -16,6 +16,8 @@ class QVBoxLayout;
 
 namespace bangke {
 
+void configureComboBox(QComboBox* combo);
+
 // mac 的开关：轨道 + 圆点，切换时滑动。QSS 的 ::indicator 做不出这个观感。
 class Switch : public QAbstractButton {
   Q_OBJECT
