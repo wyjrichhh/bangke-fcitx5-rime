@@ -24,7 +24,6 @@ config = Path.home()/'.config/fcitx5/conf/classicui.conf'
 before = config.read_bytes() if config.exists() else None
 assert not bus.name_has_owner('org.kde.impanel'), 'Run on Omarchy with its original classic UI'
 panel = dbus.Interface(bus.get_object('org.bangke.Panel', '/org/bangke/Panel'), 'org.bangke.Panel1')
-private = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/bangke/panel'), 'org.bangke.Panel1')
 im = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/org/freedesktop/portal/inputmethod'),
                     'org.fcitx.Fcitx.InputMethod1')
 path, _ = im.CreateInputContext([('program', 'org.bangke.PanelIsolationTest'),
@@ -108,6 +107,10 @@ def assert_commit():
 
 try:
     context.FocusIn()
+    # The engine is on-demand; load its private API through the actual menu.
+    select_menu('rime-ai')
+    pump(.3)
+    private = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', '/bangke/panel'), 'org.bangke.Panel1')
     for name in ('rime', 'rime-ai', 'rime'):
         type_text(name)
         state = json.loads(str(panel.GetPanelState()))
