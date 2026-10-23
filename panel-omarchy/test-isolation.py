@@ -88,7 +88,6 @@ def type_text(name, text='jintiantianqihenhao'):
     context.Reset()
     controller.Activate()
     select_menu(name)
-    controller.Activate()
     pump()
     assert str(controller.CurrentInputMethod()) == name
     endpoint, interface = ('/bangke', 'org.fcitx.Fcitx.Bangke1') if name == 'rime-ai' else ('/rime', 'org.fcitx.Fcitx.Rime1')

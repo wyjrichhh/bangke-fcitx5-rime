@@ -23,7 +23,37 @@ def profile(text, remove=False, target_name="rime-ai"):
         if match:
             name = next((x.strip()[5:] for x in lines if x.startswith('Name=')), '')
             items.setdefault(match[1], []).append(name)
-    if not remove and any('rime-ai' in names for names in items.values()): return text
+    if not remove and any('rime-ai' in names for names in items.values()):
+        # Older settings templates put Bangke in slot zero. Fcitx treats that
+        # slot as the inactive keyboard, so menu activation must never use it.
+        for group in items:
+            entries = []
+            for section in sections:
+                match = re.fullmatch(r'\[Groups/' + group + r'/Items/(\d+)\]', section[0])
+                if match:
+                    name = next((line.strip()[5:] for line in section[1] if line.startswith('Name=')), '')
+                    entries.append((int(match[1]), name, section))
+            first = next((section for index, name, section in entries if index == 0 and name == 'rime-ai'), None)
+            if first is None: continue
+            keyboard = next(((index, section) for index, name, section in sorted(entries, key=lambda row: row[0]) if name.startswith('keyboard-')), None)
+            if keyboard:
+                index, section = keyboard
+                first[0] = f'[Groups/{group}/Items/{index}]'
+                first[1][0] = first[0] + '\n'
+                section[0] = f'[Groups/{group}/Items/0]'
+                section[1][0] = section[0] + '\n'
+            else:
+                for index, name, section in entries:
+                    section[0] = f'[Groups/{group}/Items/{index+1}]'
+                    section[1][0] = section[0] + '\n'
+                root = next((lines for header, lines in sections if header == f'[Groups/{group}]'), [])
+                layout = next((line.split('=', 1)[1].strip() for line in root if line.startswith('Default Layout=')), 'us') or 'us'
+                header = f'[Groups/{group}/Items/0]'
+                entry = [header, [header+'\n', f'Name=keyboard-{layout}\n', 'Layout=\n', '\n']]
+                offset = next((i for i, section in enumerate(sections) if section[0] == '[GroupOrder]'), len(sections))
+                sections.insert(offset, entry)
+        return ''.join(''.join(lines) for _, lines in sections)
+
     if not remove:
         groups = [re.fullmatch(r'\[Groups/(\d+)\]', h) for h, _ in sections]
         group = next((m[1] for m in groups if m), None)
