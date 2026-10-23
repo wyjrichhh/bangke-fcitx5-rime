@@ -426,7 +426,8 @@ void RimeEngine::notify(RimeSessionId session, const std::string &messageType,
     timeEvent_ = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
         [this](EventSourceTime *, uint64_t) {
-            if (auto *ic = instance_->lastFocusedInputContext()) {
+            if (auto *ic = instance_->lastFocusedInputContext();
+                ic && ic->hasFocus() && instance_->inputMethod(ic) == "rime-ai") {
                 imAction_->update(ic);
                 ic->updateUserInterface(UserInterfaceComponent::StatusArea);
             }
@@ -449,6 +450,9 @@ void RimeEngine::handleReservedProperty(RimeSessionId session,
     if (key == reservedproperty::kRefreshUI) {
         instance_->inputContextManager().foreach(
             [this, session](InputContext *ic) {
+                if (!ic->hasFocus() || instance_->inputMethod(ic) != "rime-ai") {
+                    return true;
+                }
                 if (auto *state = this->state(ic)) {
                     if (state->session() == session) {
                         // 异步刷新：不清空面板，只重拉内容（见 rimestate.h）。
@@ -567,11 +571,15 @@ void RimeEngine::nudgeComposition(RimeSessionId session) {
     // RefreshNonConfirmedComposition() —— 那次重排会重跑 Query，缓存里已经有
     // 结果就把 AI 候选交出来，同时把 pending 清掉，泵下一拍自然停。mac 用
     // soft_cursor 同理。
-    api_->set_option(session, "soft_cursor",
-                     api_->get_option(session, "soft_cursor"));
     instance_->inputContextManager().foreach([this, session](InputContext *ic) {
+        if (!ic->hasFocus() || instance_->inputMethod(ic) != "rime-ai") {
+            return true;
+        }
         if (auto *state = this->state(ic)) {
             if (state->session() == session) {
+                // A delayed AI result must not update another input method's panel.
+                api_->set_option(session, "soft_cursor",
+                                 api_->get_option(session, "soft_cursor"));
                 // 异步刷新：不清面板、不清注释（见 rimestate.h）。
                 state->updateUI(ic, /*keyRelease=*/false,
                                 /*clearReservedComments=*/false,
