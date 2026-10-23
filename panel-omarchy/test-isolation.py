@@ -54,10 +54,36 @@ def native_windows():
     return shown
 
 
+def select_menu(name):
+    watcher = dbus.Interface(bus.get_object('org.kde.StatusNotifierWatcher', '/StatusNotifierWatcher'),
+                              'org.freedesktop.DBus.Properties')
+    items = watcher.Get('org.kde.StatusNotifierWatcher', 'RegisteredStatusNotifierItems')
+    assert items, 'Input-method tray menu is missing'
+    labels = {str(row[0]): str(row[1]) for row in controller.AvailableInputMethods()}
+    for item in items:
+        service, path = str(item).split('/', 1)
+        properties = dbus.Interface(bus.get_object(service, '/'+path), 'org.freedesktop.DBus.Properties')
+        menu_path = str(properties.Get('org.kde.StatusNotifierItem', 'Menu'))
+        menu = dbus.Interface(bus.get_object(service, menu_path), 'com.canonical.dbusmenu')
+        _, root = menu.GetLayout(0, -1, [])
+        def find(node):
+            ident, properties, children = node
+            if str(properties.get('label', '')) == labels[name]: return int(ident)
+            for child in children:
+                found = find(child)
+                if found is not None: return found
+            return None
+        ident = find(root)
+        if ident is not None:
+            menu.Event(dbus.Int32(ident), 'clicked', dbus.String('', variant_level=1), dbus.UInt32(0))
+            return
+    raise AssertionError('Input-method tray menu does not contain '+labels[name])
+
+
 def type_text(name, text='jintiantianqihenhao'):
     context.Reset()
     controller.Activate()
-    controller.SetCurrentIM(name)
+    select_menu(name)
     pump()
     assert str(controller.CurrentInputMethod()) == name
     endpoint, interface = ('/bangke', 'org.fcitx.Fcitx.Bangke1') if name == 'rime-ai' else ('/rime', 'org.fcitx.Fcitx.Rime1')
@@ -125,7 +151,7 @@ try:
     assert_commit()
     assert not bus.name_has_owner('org.kde.impanel'), 'Bangke acquired global Kimpanel'
     assert (config.read_bytes() if config.exists() else None) == before, 'Original skin configuration changed'
-    print('PASS: native/private/native windows, click/paging, focus-out, crash fallback/recovery and original skin preservation', flush=True)
+    print('PASS: tray menu switching, native/private/native windows, click/paging, focus-out, crash fallback/recovery and original skin preservation', flush=True)
 finally:
     subprocess.run(['systemctl', '--user', 'start', 'bangke-panel.service'], check=True)
     context.Reset()
