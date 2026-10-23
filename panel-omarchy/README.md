@@ -4,7 +4,7 @@
 
 - `panel.py`：GTK3 / Pango / Cairo 绘制，通过专属 D-Bus 名称 `org.bangke.Panel` 接收蚌壳候选，点击和翻页只发给 `/bangke/panel`。蚌壳专用信号提供独立注释与组合输入生命周期。
 - `hyprland-caret-plugin/caretshim.cpp`：读取 Hyprland 中的真实输入光标位置，提供面板毛玻璃开关，并禁用候选窗口动画。
-- `tray/`：供 GNOME 的 Kimpanel 集成使用；Omarchy 保留原有托盘配置，不加载此桥接。
+- `tray/`：供 GNOME 的 Kimpanel 集成使用；Omarchy 不加载此桥接，由 Classic UI 启用标准 StatusNotifierItem，恢复输入法切换菜单。
 - `themes/`：23 个 Omarchy 配色定义及原始许可证。系统和用户安装的同名主题优先于内置目录。
 
 ## 布局与绘制
@@ -23,7 +23,7 @@ Qt 解析 YAML 并输出版本化外观 JSON，供设置预览与运行面板共
 
 统一通过 `dist/build-arch.sh` 打包并由 pacman 安装，不再支持旧实验安装脚本。`dist/lifecycle/` 管理用户注册、种子数据同步、服务及卸载。`migrate-experiment.py` 是必要的升级兼容代码，只回收已知旧实验启动项，不能当临时诊断脚本删除。
 
-安装不强制设置全局 UI，也不修改其他输入法的候选皮肤。Fcitx5 的单上下文回调只为 `rime-ai` 绘制蚌壳候选；其他输入法和要求客户端绘制候选的应用继续使用原有路径。面板停止时自动恢复原有 UI，当前组合输入不丢失。升级会移除旧版写入的 `20-bangke-kimpanel.conf`。此独立路径通过 Arch 构建的 `BANGKE_PRIVATE_PANEL=ON` 启用，要求 Fcitx5 5.1.2 以上；GNOME 适配不在此次 Omarchy 修复范围内。
+安装不强制设置全局 UI，也不修改其他输入法的候选皮肤。Omarchy 默认禁用了标准托盘；安装通过独立的 `20-bangke-tray.conf` 启用 `notificationitem`，让菜单同时列出蚌壳和其他输入法，卸载时回收此覆盖。Fcitx5 的单上下文回调只为 `rime-ai` 绘制蚌壳候选；其他输入法和要求客户端绘制候选的应用继续使用原有路径。面板停止时自动恢复原有 UI，当前组合输入不丢失。升级会移除旧版写入的 `20-bangke-kimpanel.conf`。此独立路径通过 Arch 构建的 `BANGKE_PRIVATE_PANEL=ON` 启用，要求 Fcitx5 5.1.2 以上；GNOME 适配不在此次 Omarchy 修复范围内。
 
 服务为 `bangke-panel.service`、`bangke-caret.service` 和 `bangke-session.service`。Hyprland 插件在用户机器使用匹配的头文件编译，加载前检查 ABI；升级 Hyprland 后需要重新登录。已验证版本为 Hyprland 0.56.2。
 

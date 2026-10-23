@@ -65,6 +65,8 @@ if [[ -f /usr/share/bangke-pinyin/omarchy || -f "$BASE/omarchy" ]]; then
   # Remove our obsolete global override without touching user UI or skin settings.
   rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-kimpanel.conf"
   if [[ $ACTION == install ]]; then
+    mkdir -p "$CONFIG/systemd/user/$UNIT.d"
+    cp /usr/share/bangke-pinyin/20-bangke-tray.conf "$CONFIG/systemd/user/$UNIT.d/20-bangke-tray.conf"
     # Migrate only the exact experimental launch paths; retain unrelated Hyprland configuration.
     python3 "$BASE/migrate-experiment.py"
     systemctl --user daemon-reload || true
@@ -75,6 +77,7 @@ if [[ -f /usr/share/bangke-pinyin/omarchy || -f "$BASE/omarchy" ]]; then
     fi
   else
     systemctl --user stop bangke-update-monitor.service bangke-panel.service bangke-caret.service || true
+    rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-tray.conf"
     rm -f "$CONFIG/systemd/user/$UNIT.d/20-bangke-kimpanel.conf"
     python3 "$BASE/migrate-experiment.py" --remove
   fi

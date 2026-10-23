@@ -59,6 +59,13 @@ ConditionEnvironment=WAYLAND_DISPLAY
 Type=oneshot
 ExecStart=/usr/lib/bangke-pinyin/session.sh install
 EOF
+  # Omarchy disables the standard SNI item. Restore its input-method menu
+  # independently of candidate rendering; never force a global UI backend.
+  cat > "$ROOT/usr/share/bangke-pinyin/20-bangke-tray.conf" <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/fcitx5 --enable notificationitem
+EOF
   cat > "$ROOT/usr/lib/systemd/user/bangke-panel.service" <<'EOF'
 [Unit]
 Description=Bangke candidate panel
