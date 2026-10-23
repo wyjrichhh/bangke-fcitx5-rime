@@ -65,6 +65,8 @@ def select_menu(name):
         properties = dbus.Interface(bus.get_object(service, '/'+path), 'org.freedesktop.DBus.Properties')
         menu_path = str(properties.Get('org.kde.StatusNotifierItem', 'Menu'))
         menu = dbus.Interface(bus.get_object(service, menu_path), 'com.canonical.dbusmenu')
+        menu.AboutToShow(0)
+        menu.Event(dbus.Int32(0), 'opened', dbus.String('', variant_level=1), dbus.UInt32(0))
         _, root = menu.GetLayout(0, -1, [])
         def find(node):
             ident, properties, children = node
@@ -76,6 +78,8 @@ def select_menu(name):
         ident = find(root)
         if ident is not None:
             menu.Event(dbus.Int32(ident), 'clicked', dbus.String('', variant_level=1), dbus.UInt32(0))
+            pump(.15)  # Fcitx defers menu actions until keyboard focus returns.
+            menu.Event(dbus.Int32(0), 'closed', dbus.String('', variant_level=1), dbus.UInt32(0))
             return
     raise AssertionError('Input-method tray menu does not contain '+labels[name])
 
