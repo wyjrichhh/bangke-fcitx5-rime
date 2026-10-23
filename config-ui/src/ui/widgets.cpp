@@ -313,11 +313,13 @@ void SettingsComboBox::hidePopup() {
 }
 
 void SettingsComboBox::commitIndex(const QModelIndex& index) {
+  qInfo("Commit dropdown row=%d flags=%x", index.row(), int(index.flags()));
   if (!index.isValid() || !(index.flags() & Qt::ItemIsEnabled) ||
       !(index.flags() & Qt::ItemIsSelectable)) return;
   setCurrentIndex(index.row());
   emit activated(index.row());
   hidePopup();
+  qInfo("Committed dropdown current=%d visible=%d", currentIndex(), popup_->isVisible());
 }
 
 bool SettingsComboBox::eventFilter(QObject* watched, QEvent* event) {
