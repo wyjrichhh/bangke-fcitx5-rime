@@ -10,7 +10,7 @@
 //      omarchy/default/themed/shell.toml.tpl 真渲染出来的（见 tests/fixtures/）。
 
 #include <QColor>
-#include <QCoreApplication>
+#include <QGuiApplication>
 #include <QDir>
 #include <QHash>
 #include <cstdio>
@@ -56,7 +56,7 @@ QString fixture(const QString& name) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  QCoreApplication app(argc, argv);
+  QGuiApplication app(argc, argv);
 
   // ---------------------------------------------------------------- 中立性
   // 读不到 Omarchy（目录不存在）时必须无效。
