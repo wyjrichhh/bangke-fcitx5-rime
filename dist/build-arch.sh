@@ -1,34 +1,8 @@
 #!/usr/bin/env bash
-# 蚌壳拼音 —— Arch 系（aarch64 / x86_64）出包。同一份脚本，两个架构各在自己的容器里跑：
-#
-#   aarch64（Mac 本机，Apple Silicon 原生）：
-#     docker run --rm \
-#       -v ~/dev/bangke/bangke-fcitx5-rime:/priv \
-#       -v ~/dev/bangke/bangke-librime:/librime:ro \
-#       -v ~/dev/bangke/bangke-ai-predict:/plugin:ro \
-#       -v ~/bangke/vendor:/vendor:ro \
-#       -v ~/bangke/build-out/aarch64:/out \
-#       menci/archlinuxarm:base bash /priv/dist/build-arch.sh
-#
-#   x86_64（在构建机 17 上跑，那边原生 x86_64；Mac 上编 amd64 慢且老被本机代理干扰）：
-#     docker run --rm \
-#       -v ~/bangke/commit/fcitx5-rime:/priv \
-#       -v ~/bangke/commit/bangke-librime:/librime:ro \
-#       -v ~/bangke/commit/bangke-ai-predict:/plugin:ro \
-#       -v ~/bangke/vendor:/vendor:ro \
-#       -v ~/bangke/build-out/x86_64:/out \
-#       archlinux:latest bash /priv/dist/build-arch.sh
-#
-# 产物：/out/bangke-pinyin-<版本>-<pkgrel>-<架构>.pkg.tar.zst（+ 未打包的 bangke-pkg 安装树）。
-# 架构不写死在脚本里：PKGBUILD 声明了 arch=('aarch64' 'x86_64')，makepkg 自己认。
-#
-# 与 Ubuntu 线同一套约定（/priv + /librime + /plugin + /vendor + /out），平台差异只有容器
-# 镜像与包格式；产物互不通用 —— Arch 是滚动发行版，glibc 方向与 22.04 相反。
-#
-# 两个复用开关：
-#   SKIP_DEPS=1    依赖已装好的环境跳过联网装包（把出过包的容器 commit 成镜像再跑即可；
-#                  本机 fake-ip 代理会掐掉 archlinuxarm 镜像站，那时全靠它）
-#   SKIP_LIBRIME=1 复用 /out/src 里已有的 CT2 与 librime 构建树（只改了 addon/打包时用）
+# Build isolated Bangke packages in a native Arch container for each architecture.
+# Mount frontend=/priv, engine=/librime, plugin=/plugin, assets=/vendor, output=/out.
+# See LINUX_BUILD.md for container commands and vendor requirements.
+# SKIP_DEPS=1 reuses system dependencies; SKIP_LIBRIME=1 reuses matching builds.
 
 set -euo pipefail
 JOBS="${JOBS:-4}"

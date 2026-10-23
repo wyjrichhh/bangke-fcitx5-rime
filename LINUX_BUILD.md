@@ -2,7 +2,7 @@
 
 ## 源码与物料
 
-维护分支：`main`。从私有仓库克隆本项目，并准备 `bangke-librime`、`bangke-ai-predict`。发布模型、字体、词典和第三方源码从团队物料库取得，不依赖开发者共享目录或 SSH 主机。
+维护分支：`main`。从项目仓库克隆本项目，并准备 `bangke-librime`、`bangke-ai-predict`。发布模型、字体、词典和第三方源码从团队物料库取得，不依赖开发者共享目录或 SSH 主机。
 
 容器挂载约定：
 
@@ -32,7 +32,7 @@ docker run --rm --platform linux/arm64 \
 
 Intel/AMD 将 `--platform` 改为 `linux/amd64`，镜像改为 `archlinux:latest`，输出目录改为 `build-out/x86_64`。两个构建不要同时挂载同一份可写源码：使用独立克隆或 worktree，防止 `build/` 和 `config-ui/build/` 混入另一架构的对象文件。
 
-结果为 `/out/bangke-pinyin-<版本>-<pkgrel>-<架构>.pkg.tar.zst`。版本默认 `5.0.19`，当前 pkgrel 为 `18`。`SKIP_DEPS=1`、`SKIP_LIBRIME=1` 只适用于已有且匹配的构建环境。`dist/repack-arch.sh` 复用已组装的二进制，源码变更后必须先重新编译并更新安装树，不能用重打包代替构建。
+结果为 `/out/bangke-pinyin-<版本>-<pkgrel>-<架构>.pkg.tar.zst`。版本默认 `5.0.19`，当前 pkgrel 为 `23`。`SKIP_DEPS=1`、`SKIP_LIBRIME=1` 只适用于已有且匹配的构建环境。`dist/repack-arch.sh` 复用已组装的二进制，源码变更后必须先重新编译并更新安装树，不能用重打包代替构建。
 
 ## Ubuntu 24.04 amd64
 
@@ -65,6 +65,6 @@ dbus-run-session -- python3 panel-omarchy/test-theme-switch.py
 
 D-Bus 测试使用私有 HOME；Xvfb 测试使用显示号 `:97`，不要并发执行。托盘测试需要先安装对应架构的完整包：`dbus-run-session -- python3 panel-omarchy/tray/test-registration.py`。生成视觉参考：`python3 panel-omarchy/render-reference.py /tmp/bangke-references`。
 
-Omarchy 真实桌面还需验证面板隔离（需要 `xorg-xwininfo`）：`DISPLAY=:1 python3 panel-omarchy/test-isolation.py`，显示号使用该会话的实际值。该测试确认原生/蚌壳窗口归属、点击翻页、失焦和面板停止/恢复，不通过客户端候选绕过真实 UI。`test-live-settings.py` 和 `test-theme-switch.py` 可设置 `BANGKE_TEST_DISPLAY` 复用现有 XWayland，仍需通过 `dbus-run-session` 隔离总线。
+Omarchy 真实桌面还需验证面板隔离（需要 `xorg-xwininfo`）：`DISPLAY=:1 python3 panel-omarchy/test-isolation.py`，显示号使用该会话的实际值。该测试确认原生/蚌壳窗口归属、方案切换气泡及超时、推理期间快速切换、点击翻页、失焦和面板停止/恢复，不通过客户端候选绕过真实 UI。`test-live-settings.py` 和 `test-theme-switch.py` 可设置 `BANGKE_TEST_DISPLAY` 复用现有 XWayland，仍需通过 `dbus-run-session` 隔离总线。
 
 发布前在两种架构检查安装、重复安装和升级；真实桌面验收输入定位、长文本、主题切换、透明度、毛玻璃及托盘。记录构建提交、引擎和 AI 插件提交、物料版本及包 SHA256。不要把容器测试等同于真实桌面验收。
