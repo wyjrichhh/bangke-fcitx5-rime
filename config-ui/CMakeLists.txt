@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6.0)
+cmake_minimum_required(VERSION 3.10)
 project(bangke-pinyin-config VERSION 5.0.11 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -161,3 +161,11 @@ add_executable(updatechecker_test EXCLUDE_FROM_ALL
     tests/updatechecker_test.cpp src/update/updatechecker.cpp src/update/updatechecker.h)
 target_include_directories(updatechecker_test PRIVATE src)
 target_link_libraries(updatechecker_test PRIVATE Qt5::Core Qt5::Network)
+
+add_executable(layoutpreview_test EXCLUDE_FROM_ALL
+    tests/layoutpreview_test.cpp ${custompanel_save_sources})
+target_include_directories(layoutpreview_test PRIVATE src)
+target_compile_definitions(layoutpreview_test PRIVATE
+    BANGKE_TEST_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+    BANGKE_SOURCE_YAML="${CMAKE_CURRENT_SOURCE_DIR}/../data/bangke.yaml")
+target_link_libraries(layoutpreview_test PRIVATE Qt5::Widgets Qt5::DBus Qt5::Network)

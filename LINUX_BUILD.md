@@ -51,11 +51,13 @@ Linux 环境需要 Qt5 开发包、Python GTK3/Pango introspection、Cairo、D-B
 ```bash
 cmake -S config-ui -B config-ui/build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build config-ui/build --target bangke-pinyin-config configuration_test \
-  platformtheme_test custompanel_save_test
+  platformtheme_test custompanel_save_test layoutpreview_test
 QT_QPA_PLATFORM=offscreen BK_OMARCHY_CATALOG_DIR="$PWD/panel-omarchy/themes" \
   config-ui/build/configuration_test
 QT_QPA_PLATFORM=offscreen BK_OMARCHY_CATALOG_DIR="$PWD/panel-omarchy/themes" \
   config-ui/build/platformtheme_test
+QT_QPA_PLATFORM=offscreen BK_OMARCHY_CATALOG_DIR="$PWD/panel-omarchy/themes" \
+  config-ui/build/layoutpreview_test
 python3 panel-omarchy/test-appearance.py
 python3 panel-omarchy/test-stability.py
 python3 dist/lifecycle/test-user-data.py
@@ -68,3 +70,26 @@ D-Bus 测试使用私有 HOME；Xvfb 测试使用显示号 `:97`，不要并发�
 Omarchy 真实桌面还需验证面板隔离（需要 `xorg-xwininfo`）：`DISPLAY=:1 python3 panel-omarchy/test-isolation.py`，显示号使用该会话的实际值。该测试确认原生/蚌壳窗口归属、方案切换气泡及超时、推理期间快速切换、点击翻页、失焦和面板停止/恢复，不通过客户端候选绕过真实 UI。`test-live-settings.py` 和 `test-theme-switch.py` 可设置 `BANGKE_TEST_DISPLAY` 复用现有 XWayland，仍需通过 `dbus-run-session` 隔离总线。
 
 发布前在两种架构检查安装、重复安装和升级；真实桌面验收输入定位、长文本、主题切换、透明度、毛玻璃及托盘。记录构建提交、引擎和 AI 插件提交、物料版本及包 SHA256。不要把容器测试等同于真实桌面验收。
+
+## 设置布局与预览覆盖
+
+设置分类在顶部独立居中；外观和行为页采用左侧可滚动设置、右侧固定预览。候选预览使用当前系统主题，保持实际字号，内容超出时滚动查看，不整体缩小。设置窗口始终使用系统主题；候选配色仍保留已有的跟随系统与固定方案选择能力。
+
+`layoutpreview_test` 在 Tokyo Night 和 Flexoki Light 下操作真实控件，比较候选画布像素及输入场景文字，检查导航居中、切页、设置滚动与预览位置。可用 `BANGKE_LAYOUT_SCREENSHOTS=/tmp/bangke-layout` 保存整窗离屏参考；参考图不能代替真实 Wayland 桌面验收。
+
+| 设置 | 预览范围与条件 |
+| --- | --- |
+| 配色、字体、字号、背景透明度、圆角、阴影、边框宽高、候选排列、文字方向、行间距、候选格式 | 联动候选画布；只显示当前深浅模式对应的配色。边框宽高取较小值，任何一项为 0 时不描边。 |
+| 预编辑位置、间距 | 关闭输入框内预编辑后，拼音出现在候选面板顶部，此时间距才可见。 |
+| 输入框内选中候选 | 输入框内预编辑开启时，在上方输入场景切换拼音与选中候选。 |
+| 翻页按钮 | 联动候选窗箭头的显示；真实输入还受候选总数影响，预览不模拟翻页请求。 |
+| 避免透明颜色叠加 | 联动背景与高亮的合成；底色完全不透明时，两种合成可能视觉相同。 |
+| 每页候选数、拼音提示 | 行为页联动示例候选数量与注释；不调用真实词典。 |
+| 高亮圆角 | 当前贴边连续高亮将内部边界固定为直角，此项保留禁用状态，不声称预览或实际形状生效。 |
+| 毛玻璃背景 | 静态画布不能验证 Hyprland 背景采样；需要实际合成器及非零背景透明度。 |
+| 记忆本次输入的面板宽度 | 需要连续输入、候选更新及结束输入的完整生命周期，静态预览不模拟。 |
+| Shift 切换动作 | 需要真实键盘事件与 Fcitx5 上下文，不在候选画布模拟。 |
+| AI 启用、候选插入位置、过滤标点 | AI 页联动固定示例，不运行模型；插入位置超出当前页时，该页不显示 AI 示例。 |
+| AI 模型与触发、生成、去重参数；方案启用、简繁转换、用户词典 | 需要真实模型或输入方案运行结果；不能用静态候选示例替代验证。 |
+
+预览在设置区域内滚动展示完整长文本；运行面板根据真实屏幕可用宽度换行，两者的可用宽度不同，不作逐像素一致承诺。Qt 与 GTK/Pango 的字体栅格化差异仍需实机对照。

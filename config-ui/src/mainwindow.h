@@ -8,6 +8,7 @@
 
 class QLabel;
 class QStackedWidget;
+class QTabBar;
 
 namespace bangke {
 class Sidebar;
@@ -34,7 +35,7 @@ class MainWindow : public QMainWindow {
   RimeData data_;
   bangke::BangkeConfig config_;
 
-  bangke::Sidebar* sidebar_ = nullptr;
+  QTabBar* navigation_ = nullptr;
   QStackedWidget* stack_ = nullptr;
   QLabel* status_ = nullptr;
   bangke::AppearancePage* appearance_ = nullptr;

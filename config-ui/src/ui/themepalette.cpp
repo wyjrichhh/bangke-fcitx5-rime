@@ -103,19 +103,38 @@ QMainWindow, QStackedWidget, QDialog, QMessageBox { background: %2; color: %1; }
 QMessageBox QLabel { background: transparent; color: %1; }
 QMessageBox QTextEdit { background: %4; color: %1; }
 QWidget#brandNavigation { background: %10; }
+QWidget#topNavigation { background: %2; border-bottom: 1px solid %5; }
+QLabel#navigationBrand { font-size: 16px; font-weight: 600; }
+QTabBar#pageNavigation::tab {
+  background: transparent; color: %9; border: 1px solid transparent;
+  border-radius: 8px; padding: 10px 16px; margin: 0 3px;
+}
+QTabBar#pageNavigation::tab:hover { background: %6; color: %1; }
+QTabBar#pageNavigation::tab:selected { background: %6; color: %7; font-weight: 600; }
+QTabBar#pageNavigation::tab:focus { border-color: %7; }
+QWidget#previewScene { background: %10; border: 1px solid %5; border-radius: 12px; }
+QLabel#previewHeading { color: %9; font-size: 12px; }
+QLabel#previewComposition { background: transparent; font-size: 15px; }
+QLabel#previewNote { color: %9; font-size: 12px; }
+
 QLabel[secondary="true"] { color: %9; }
 QLabel#pageTitle { font-size: 26px; font-weight: 600; }
 QLabel#brandMark { color: %7; font-size: 76px; font-weight: 300; background: transparent; }
 QLabel#brandTitle { font-size: 23px; font-weight: 600; }
 QLabel#brandCaption { color: %9; font-size: 12px; line-height: 1.6; }
-QFrame#settingsGroup { background: %4; border: 1px solid %5; border-radius: 8px; }
+QFrame#settingsGroup { background: %4; border: 1px solid %5; border-radius: 12px; }
 QLabel#sectionHeading { color: %7; border-bottom: 1px solid %5; font-size: 12px; }
 QWidget#settingsFooter { background: %2; border-top: 1px solid %5; }
 QScrollArea { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
-QScrollBar::handle:vertical { background: %3; border-radius: 4px; min-height: 24px; }
-QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
+QScrollBar::handle:vertical { background: %5; border-radius: 4px; min-height: 24px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QScrollBar:horizontal { background: transparent; height: 8px; margin: 0; }
+QScrollBar::handle:horizontal { background: %5; border-radius: 4px; min-width: 24px; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 QComboBox {
   background: %4; border: 1px solid %5; border-radius: 6px;
   padding: 7px 12px; min-height: 24px;

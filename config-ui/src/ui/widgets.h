@@ -135,6 +135,7 @@ class PageScaffold : public QWidget {
   void addRow(QWidget* row);
   void addWidget(QWidget* widget);
   void addFixedWidget(QWidget* widget);
+  void addSideWidget(QWidget* widget);
   void addSpacing(int height);
 
  private:

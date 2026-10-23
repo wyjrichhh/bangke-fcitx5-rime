@@ -9,6 +9,8 @@
 #include "theme/panelspec.h"
 
 class QPainter;
+class QLabel;
+class QScrollArea;
 
 namespace bangke {
 
@@ -36,7 +38,7 @@ void renderPanel(QPainter* painter, const PanelSpec& spec,
 // 面板在给定缩放下的自然尺寸（供对账断言用）。
 QSizeF panelSize(const PanelSpec& spec, const PreviewSamples& samples);
 
-// mac 的浅/深双栏预览条：固定灰背板、圆角 10、定高。
+// Current-system-theme preview with an unscaled, scrollable candidate canvas.
 class PreviewStrip : public QWidget {
   Q_OBJECT
  public:
@@ -44,6 +46,7 @@ class PreviewStrip : public QWidget {
 
   void setSpecs(const PanelSpec& light, const PanelSpec& dark);
   void setSamples(const PreviewSamples& samples);
+  void setInlineCandidate(bool enabled);
 
   QSize sizeHint() const override;
 
@@ -51,6 +54,10 @@ class PreviewStrip : public QWidget {
   void paintEvent(QPaintEvent* event) override;
 
  private:
+  void refresh();
+  QScrollArea* scroll_ = nullptr;
+  QLabel* composition_ = nullptr;
+  bool inlineCandidate_ = false;
   PanelSpec light_;
   PanelSpec dark_;
   PreviewSamples samples_;

@@ -36,6 +36,7 @@ namespace {
 QLabel* noteLabel(const QString& text, QWidget* parent) {
   auto* label = new QLabel(text, parent);
   label->setWordWrap(true);
+  label->setProperty("secondary", true);
   QPalette pal = label->palette();
   pal.setColor(QPalette::WindowText, palette::secondaryText(label));
   label->setPalette(pal);
@@ -106,7 +107,8 @@ bool fcitxSupportsDarkTheme() {
 FontButton::FontButton(const QString& family, QWidget* parent)
     : RowShell(QStringLiteral("字体"), QString(), nullptr, parent), fallback_(family) {
   button_ = new QPushButton(family, this);
-  button_->setMinimumWidth(220);
+  button_->setMinimumWidth(156);
+  button_->setMaximumWidth(220);
   if (auto* shell = qobject_cast<QHBoxLayout*>(this->layout()))
     shell->addWidget(button_);
 }
@@ -135,7 +137,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
       config_(config) {
   customPanel_ = RimeDeploy::usesCustomPanel() || config.platform().source == ThemeSource::Omarchy;
   preview_ = new PreviewStrip(this);
-  addFixedWidget(preview_);
+  addSideWidget(preview_);
   if (customPanel_) {
     auto* watcher = new QFileSystemWatcher(this);
     auto* settle = new QTimer(this);
@@ -159,6 +161,7 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
       qApp->setStyleSheet(palette::styleSheet(nullptr));
       // Only refresh rendering; retain every unsaved control value.
       updatePreview();
+      emit changed();
       window()->update();
     });
   }
@@ -232,15 +235,17 @@ AppearancePage::AppearancePage(const BangkeConfig& config,
   addRow(border_);
   if (customPanel_) {
     borderHeight_ = new SliderRow(QStringLiteral("边框高度"), QStringLiteral("与边框宽度取较小值作为描边粗细；0 关闭描边。"), 0, 20, 1, qMax(0, style.borderHeight), QStringLiteral(" pt"), this);
-    highlightCorner_ = new SliderRow(QStringLiteral("高亮圆角"), QStringLiteral("高亮贴合面板边缘：首尾跟随面板圆角，中间保持直角。"), 0, 30, 1, style.hilitedCornerRadius, QStringLiteral(" pt"), this);
+    highlightCorner_ = new SliderRow(QStringLiteral("高亮圆角"), QStringLiteral("当前连续贴边高亮使用直角内部边界，此参数暂不生效。"), 0, 30, 1, style.hilitedCornerRadius, QStringLiteral(" pt"), this);
+
     highlightCorner_->setEnabled(false);
+    highlightCorner_->setToolTip(QStringLiteral("当前面板采用贴边连续高亮，内部边界固定为直角；此参数暂不生效。"));
     lineSpacing_ = new SliderRow(QStringLiteral("行间距"), QString(), -10, 30, 1, style.lineSpacing, QStringLiteral(" pt"), this);
     spacing_ = new SliderRow(QStringLiteral("预编辑间距"), QStringLiteral("拼音显示在面板时，与候选之间的距离。"), -10, 30, 1, style.spacing, QStringLiteral(" pt"), this);
     for (auto* row : {borderHeight_, highlightCorner_, lineSpacing_, spacing_}) addRow(row);
     inlinePreedit_ = new ToggleRow(QStringLiteral("在输入框中显示预编辑"), QStringLiteral("关闭后拼音显示在候选面板顶部。"), style.inlinePreedit, this);
     inlineCandidate_ = new ToggleRow(QStringLiteral("在输入框中显示选中候选"), QStringLiteral("应用支持预编辑且上项开启时生效。"), style.inlineCandidate, this);
-    memorizeSize_ = new ToggleRow(QStringLiteral("记忆本次输入的面板宽度"), QStringLiteral("连续输入时只扩宽，结束本次输入后重置，减少晃动。"), style.memorizeSize, this);
-    translucency_ = new ToggleRow(QStringLiteral("毛玻璃背景"),QStringLiteral("由桌面合成器绘制；将背景透明度调高于 0 可见毛玻璃效果。"),style.translucency,this);
+    memorizeSize_ = new ToggleRow(QStringLiteral("记忆本次输入的面板宽度"), QStringLiteral("连续输入时只扩宽，结束本次输入后重置；需实际输入验证，静态预览不模拟。"), style.memorizeSize, this);
+    translucency_ = new ToggleRow(QStringLiteral("毛玻璃背景"),QStringLiteral("由桌面合成器绘制，静态预览不模拟；实际使用时背景透明度需高于 0。"),style.translucency,this);
     mutualExclusive_ = new ToggleRow(QStringLiteral("避免透明颜色叠加"), QStringLiteral("高亮区域直接显示高亮色，不透出面板底色。"), style.mutualExclusive, this);
     if (qgetenv("BANGKE_PANEL_BACKEND") == "gnome") {
       mutualExclusive_->setToolTip(QStringLiteral("高亮区域移除面板底色，避免两层透明背景叠加。"));
@@ -347,10 +352,12 @@ void AppearancePage::setStyle(const StyleOptions& style) {
     candidateFormat_->setText(style.candidateFormat);
   }
   updatePreview();
+  emit changed();
 }
 
 void AppearancePage::updatePreview() {
   const StyleOptions current = style();
+  preview_->setInlineCandidate(current.inlinePreedit && current.inlineCandidate);
   preview_->setSpecs(panelSpecFor(config_, current, false),
                      panelSpecFor(config_, current, true));
 }
@@ -359,6 +366,9 @@ void AppearancePage::updatePreview() {
 
 BehaviorPage::BehaviorPage(const RimeData& data, QWidget* parent)
     : PageScaffold(QStringLiteral("行为"), QStringLiteral("候选数量与切换键"), parent) {
+  preview_ = new PreviewStrip(this);
+  previewStyle_ = data.style;
+  addSideWidget(preview_);
   addSection(QStringLiteral("输入"));
   pageSize_ = new SliderRow(QStringLiteral("每页候选数"),
                             QStringLiteral("一页显示几个候选。"), 1, 20,
@@ -378,6 +388,39 @@ BehaviorPage::BehaviorPage(const RimeData& data, QWidget* parent)
       this);
   addRow(spellingHints_);
 
+  connect(pageSize_, &SliderRow::valueChanged, this,
+          [this](double) { updatePreview(); });
+  connect(spellingHints_->toggle(), &QAbstractButton::toggled, this,
+          [this](bool) { updatePreview(); });
+  updatePreview();
+}
+
+void BehaviorPage::setPreviewStyle(const StyleOptions& style) {
+  previewStyle_ = style;
+  updatePreview();
+}
+
+void BehaviorPage::updatePreview() {
+  const auto config = BangkeConfig::load(paths::sharedBangkeYaml(),
+                                         paths::customBangkeYaml(),
+                                         appPlatformTheme());
+  auto samples = PreviewSamples::defaults();
+  const QStringList words{QStringLiteral("蚌壳"), QStringLiteral("半个"),
+                          QStringLiteral("帮客"), QStringLiteral("棒喝")};
+  while (samples.candidates.size() < 20) {
+    const int index = samples.candidates.size();
+    samples.candidates.append({QString::number(index + 1) + QLatin1Char('.'),
+                               words.at(index % words.size()),
+                               QStringLiteral("bang ke")});
+  }
+  samples.pageSize = int(pageSize_->value());
+  if (!spellingHints_->isChecked())
+    for (auto& candidate : samples.candidates) candidate.comment.clear();
+  preview_->setSamples(samples);
+  preview_->setInlineCandidate(previewStyle_.inlinePreedit && previewStyle_.inlineCandidate);
+  preview_->setSpecs(panelSpecFor(config, previewStyle_, false),
+                     panelSpecFor(config, previewStyle_, true));
+  emit changed();
 }
 
 void BehaviorPage::collect(RimeData* data) const {
@@ -398,6 +441,13 @@ constexpr const char* kDefaultModelPath =
 AiPage::AiPage(const RimeData& data, QWidget* parent)
     : PageScaffold(QStringLiteral("智能联想"),
                    QStringLiteral("AI 预测候选（对两个内置方案同时生效）"), parent) {
+  preview_ = new PreviewStrip(this);
+  previewStyle_ = data.style;
+  previewPageSize_ = data.pageSize;
+  previewHints_ = data.spellingHints;
+  addSideWidget(preview_);
+  auto* previewNote = preview_->findChild<QLabel*>(QStringLiteral("previewNote"));
+  previewNote->setText(QStringLiteral("AI 示例，不运行模型。\n预览启用状态、标点过滤与插入位置；内容仅作展示。"));
   const AISettings& ai = data.ai;
   modelPath_ = ai.modelPath;
 
@@ -469,6 +519,53 @@ AiPage::AiPage(const RimeData& data, QWidget* parent)
     updateModelPathLabel();
   });
 
+  connect(enabled_->toggle(), &QAbstractButton::toggled, this,
+          [this](bool) { updatePreview(); });
+  connect(filterPunctuation_->toggle(), &QAbstractButton::toggled, this,
+          [this](bool) { updatePreview(); });
+  connect(targetIndex_, &SliderRow::valueChanged, this,
+          [this](double) { updatePreview(); });
+  updatePreview();
+
+}
+
+void AiPage::setPreviewStyle(const StyleOptions& style) {
+  previewStyle_ = style;
+  updatePreview();
+}
+
+void AiPage::setPreviewBehavior(int pageSize, bool spellingHints) {
+  previewPageSize_ = pageSize;
+  previewHints_ = spellingHints;
+  updatePreview();
+}
+
+void AiPage::updatePreview() {
+  const auto config = BangkeConfig::load(paths::sharedBangkeYaml(),
+                                         paths::customBangkeYaml(),
+                                         appPlatformTheme());
+  auto samples = PreviewSamples::defaults();
+  samples.pageSize = previewPageSize_;
+  while (samples.candidates.size() < 20) {
+    const int index = samples.candidates.size();
+    auto candidate = samples.candidates.at(index % 4);
+    samples.candidates.append(candidate);
+  }
+  if (!previewHints_)
+    for (auto& candidate : samples.candidates) candidate.comment.clear();
+  if (enabled_->isChecked()) {
+    const QString text = filterPunctuation_->isChecked()
+                             ? QStringLiteral("让表达更自然")
+                             : QStringLiteral("，让表达更自然。");
+    const int position = qMin(int(targetIndex_->value()), samples.candidates.size());
+    samples.candidates.insert(position, {QString(), text, QStringLiteral("AI 示例"), true});
+  }
+  for (int i = 0; i < samples.candidates.size(); ++i)
+    samples.candidates[i].label = QString::number(i + 1) + QLatin1Char('.');
+  preview_->setSamples(samples);
+  preview_->setInlineCandidate(previewStyle_.inlinePreedit && previewStyle_.inlineCandidate);
+  preview_->setSpecs(panelSpecFor(config, previewStyle_, false),
+                     panelSpecFor(config, previewStyle_, true));
 }
 
 void AiPage::updateModelPathLabel() {

@@ -8,6 +8,8 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QGridLayout>
+#include <QTabBar>
 #include <QLabel>
 #include <QIcon>
 #include <QMessageBox>
@@ -40,61 +42,56 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
 void MainWindow::buildUi() {
   setWindowTitle(YamlConfig::brandName() + QStringLiteral(" 设置"));
-  // mac 的窗口是 740×680、最小 700×620；这里对齐，另外给侧栏与页脚留出空间。
-  setMinimumSize(980, 700);
-  resize(1080, 800);
+  setMinimumSize(1060, 700);
+  resize(1240, 840);
 
   auto* central = new QWidget(this);
   auto* root = new QVBoxLayout(central);
   root->setContentsMargins(0, 0, 0, 0);
   root->setSpacing(0);
 
+  auto* navigation = new QWidget(central);
+  navigation->setObjectName(QStringLiteral("topNavigation"));
+  auto* nav = new QGridLayout(navigation);
+  nav->setContentsMargins(28, 16, 28, 16);
+  nav->setHorizontalSpacing(20);
+  nav->setColumnStretch(0, 1);
+  nav->setColumnStretch(2, 1);
+  nav->setColumnMinimumWidth(0, 170);
+  nav->setColumnMinimumWidth(2, 170);
+  auto* brand = new QLabel(YamlConfig::brandName(), navigation);
+  brand->setObjectName(QStringLiteral("navigationBrand"));
+  nav->addWidget(brand, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
+  navigation_ = new QTabBar(navigation);
+  navigation_->setObjectName(QStringLiteral("pageNavigation"));
+  navigation_->setAccessibleName(QStringLiteral("设置分类"));
+  navigation_->setExpanding(false);
+  navigation_->setDrawBase(false);
+  for (const auto& title : kPageTitles) navigation_->addTab(title);
+  nav->addWidget(navigation_, 0, 1, Qt::AlignCenter);
+  auto* caption = new QLabel(QStringLiteral("本地 AI · 自在输入"), navigation);
+  caption->setProperty("secondary", true);
+  nav->addWidget(caption, 0, 2, Qt::AlignRight | Qt::AlignVCenter);
+  root->addWidget(navigation);
+
   auto* body = new QWidget(central);
   auto* bodyLayout = new QHBoxLayout(body);
   bodyLayout->setContentsMargins(0, 0, 0, 0);
   bodyLayout->setSpacing(0);
 
-  auto* navigation = new QWidget(body);
-  navigation->setObjectName(QStringLiteral("brandNavigation"));
-  navigation->setFixedWidth(248);
-  auto* nav = new QVBoxLayout(navigation);
-  nav->setContentsMargins(24, 32, 24, 24);
-  nav->setSpacing(12);
-  auto* mark = new QLabel(QStringLiteral("蚌"), navigation);
-  mark->setObjectName(QStringLiteral("brandMark"));
-  mark->setAlignment(Qt::AlignCenter);
-  mark->setFixedHeight(108);
-  auto* brand = new QLabel(YamlConfig::brandName(), navigation);
-  brand->setObjectName(QStringLiteral("brandTitle"));
-  brand->setAlignment(Qt::AlignCenter);
-  auto* caption = new QLabel(QStringLiteral("本地 AI · 自在输入"), navigation);
-  caption->setObjectName(QStringLiteral("brandCaption"));
-  caption->setAlignment(Qt::AlignCenter);
-  nav->addWidget(mark);
-  nav->addWidget(brand);
-  nav->addWidget(caption);
-  nav->addSpacing(30);
-  sidebar_ = new bangke::Sidebar(navigation);
-  sidebar_->addItems(kPageTitles);
-  nav->addWidget(sidebar_, 1);
-  auto* privacy = new QLabel(QStringLiteral("离线推理\n输入内容留在本机"), navigation);
-  privacy->setObjectName(QStringLiteral("brandCaption"));
-  privacy->setWordWrap(true);
-  nav->addWidget(privacy);
-  bodyLayout->addWidget(navigation);
-
-  auto* divider = new QFrame(body);
-  divider->setFrameShape(QFrame::VLine);
-  divider->setFixedWidth(1);
-  QPalette dividerPalette = divider->palette();
-  dividerPalette.setColor(QPalette::WindowText, bangke::palette::separator(body));
-  divider->setPalette(dividerPalette);
-  bodyLayout->addWidget(divider);
-
   stack_ = new QStackedWidget(body);
   appearance_ = new bangke::AppearancePage(config_, data_.style, stack_);
   behavior_ = new bangke::BehaviorPage(data_, stack_);
+  connect(appearance_, &bangke::AppearancePage::changed, this, [this]() {
+    behavior_->setPreviewStyle(appearance_->style());
+    if (ai_) ai_->setPreviewStyle(appearance_->style());
+  });
   ai_ = new bangke::AiPage(data_, stack_);
+  connect(behavior_, &bangke::BehaviorPage::changed, this, [this]() {
+    RimeData previewData;
+    behavior_->collect(&previewData);
+    ai_->setPreviewBehavior(previewData.pageSize, previewData.spellingHints);
+  });
   schemas_ = new bangke::SchemasPage(data_, stack_);
   for (QWidget* page : {static_cast<QWidget*>(appearance_),
                         static_cast<QWidget*>(behavior_),
@@ -103,9 +100,9 @@ void MainWindow::buildUi() {
                         static_cast<QWidget*>(new bangke::AboutPage(stack_))})
     stack_->addWidget(page);
   bodyLayout->addWidget(stack_, 1);
-  connect(sidebar_, &QListWidget::currentRowChanged, stack_,
+  connect(navigation_, &QTabBar::currentChanged, stack_,
           &QStackedWidget::setCurrentIndex);
-  sidebar_->setCurrentRow(0);
+  navigation_->setCurrentIndex(0);
 
   root->addWidget(body, 1);
 
@@ -139,13 +136,14 @@ void MainWindow::buildUi() {
   auto* line = new QFrame(central);
   line->setFrameShape(QFrame::HLine);
   line->setFixedHeight(1);
-  root->insertWidget(1, line);
+  root->insertWidget(root->count() - 1, line);
 
   setCentralWidget(central);
 }
 
 void MainWindow::setPage(int index) {
-  if (sidebar_) sidebar_->setCurrentRow(index);
+  if (navigation_ && index >= 0 && index < stack_->count())
+    navigation_->setCurrentIndex(index);
 }
 
 void MainWindow::restoreDefaults() {

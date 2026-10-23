@@ -291,8 +291,12 @@ PanelSpec panelSpecFor(const BangkeConfig& config, const StyleOptions& style,
     spec.cornerRadius = ptToPx(style.cornerRadius);
     spec.highlightCornerRadius = ptToPx(style.hilitedCornerRadius);
     spec.borderWidth = ptToPx(qMax(0,qMin(style.borderWidth,style.borderHeight)));
-    spec.contentMargin = QMargins();
-    spec.textMargin = QMargins(12,qMax(1,ptToPx(style.lineSpacing)/2+2),12,qMax(1,ptToPx(style.lineSpacing)/2+2));
+    spec.contentMargin = QMargins(0, spec.vertical ? 4 : 0,
+                                  0, spec.vertical ? 4 : 0);
+    // Match the GTK panel's orientation-dependent cell padding.
+    const int padding = qMax(1, qRound((spec.vertical ? 4 : 16) +
+                                      (style.lineSpacing - 5) * 4.0 / 3.0) / 2);
+    spec.textMargin = QMargins(12, padding, 12, padding);
     spec.labelText = colors.label;
     spec.selectedLabelText = colors.hilitedLabel;
     spec.commentText = colors.comment;

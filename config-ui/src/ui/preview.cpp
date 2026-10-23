@@ -1,6 +1,9 @@
 #include "preview.h"
 
 #include <QFontMetricsF>
+#include <QLabel>
+#include <QScrollArea>
+#include <QVBoxLayout>
 #include <QtMath>
 #include <QPainter>
 #include <QPainterPath>
@@ -12,18 +15,13 @@
 namespace bangke {
 namespace {
 
-// 预览背板（mac 用固定灰，不随系统深浅漂移，便于并排比对）。
-const QColor kLightBackdrop(0xC0, 0xC0, 0xC0);
-const QColor kDarkBackdrop(0x69, 0x69, 0x69);
-constexpr int kStripHeight = 176;
-constexpr int kBackdropRadius = 10;
-
 struct Row {
   QString label;
   QString text;
   QString comment;
   bool highlighted = false;
   bool accentComment = false;
+  qreal textHeight = 0;
   qreal width = 0;  // 不含 textMargin
   QList<QPair<QString,int>> runs;
 };
@@ -59,6 +57,7 @@ Layout computeLayout(const PanelSpec& spec, const PreviewSamples& samples) {
     row.label = candidate.label;
     row.text = candidate.text;
     row.comment = candidate.comment;
+    row.textHeight = fm.height();
     row.highlighted = (i == 0);
     row.accentComment = candidate.accent;
     row.width = fm.horizontalAdvance(row.label) + layout.gap +
@@ -73,14 +72,15 @@ Layout computeLayout(const PanelSpec& spec, const PreviewSamples& samples) {
       auto matches = token.globalMatch(spec.candidateFormat);
       int end = 0;
       row.width = 0;
+      if (spec.verticalText) row.textHeight = 0;
       const auto append = [&](const QString& text,int role) {
         QString display = text;
         if (spec.verticalText) {
           QStringList chars;for (uint ch : text.toUcs4()) chars << QString::fromUcs4(&ch,1);
           display=chars.join(QLatin1Char('\n'));
           qreal width=0;for (const auto& ch: chars) width=qMax(width,fm.horizontalAdvance(ch));
-          row.width += width;
-          layout.fontHeight=qMax(layout.fontHeight,fm.height()*chars.size());
+          row.width = qMax(row.width, width);
+          row.textHeight += fm.height() * chars.size();
         } else row.width += fm.horizontalAdvance(text);
         row.runs.append({display,role});
       };
@@ -95,11 +95,11 @@ Layout computeLayout(const PanelSpec& spec, const PreviewSamples& samples) {
     layout.rows << row;
   }
 
-  const qreal lineHeight = layout.fontHeight + spec.textMargin.top() +
-                           spec.textMargin.bottom();
   qreal contentWidth = 0;
   qreal contentHeight = 0;
   for (const Row& row : layout.rows) {
+    const qreal lineHeight = row.textHeight + spec.textMargin.top() +
+                             spec.textMargin.bottom();
     const qreal w = row.width + spec.textMargin.left() + spec.textMargin.right();
     if (spec.vertical) {
       contentWidth = qMax(contentWidth, w);
@@ -179,7 +179,7 @@ void drawPanel(QPainter* painter, const PanelSpec& spec,
       if (spec.vertical) {
         const qreal top = rowIndex == 0 ? panel.top()+layout.preeditHeight : cursorY;
         const qreal bottom = rowIndex == layout.rows.size() - 1 ? panel.bottom()-layout.pagingHeight
-            : cursorY + layout.fontHeight + spec.textMargin.top() + spec.textMargin.bottom();
+            : cursorY + row.textHeight + spec.textMargin.top() + spec.textMargin.bottom();
         box = QRectF(panel.left(), top, panel.width(), bottom - top);
       } else {
         const qreal left = rowIndex == 0 ? panel.left() : cursorX;
@@ -200,7 +200,7 @@ void drawPanel(QPainter* painter, const PanelSpec& spec,
 
     }
 
-    if (spec.vertical) cursorY += layout.fontHeight + spec.textMargin.top() + spec.textMargin.bottom();
+    if (spec.vertical) cursorY += row.textHeight + spec.textMargin.top() + spec.textMargin.bottom();
     else cursorX += row.width + spec.textMargin.left() + spec.textMargin.right();
     ++rowIndex;
   }
@@ -221,13 +221,16 @@ void drawPanel(QPainter* painter, const PanelSpec& spec,
 
     qreal x = textX;
     const qreal baseline = textTop + ascent;
+    qreal runBaseline = baseline;
     if (!row.runs.isEmpty()) {
       for (const auto& run : row.runs) {
         QColor color=rowColor;
         if (run.second==0) color=row.highlighted?spec.selectedLabelText:spec.labelText;
         if (run.second==2) color=row.highlighted?spec.selectedCommentText:spec.commentText;
-        drawRun(painter,spec,run.first,x,baseline,color);
-        qreal width=0;for (const auto& line:run.first.split(QLatin1Char('\n'))) width=qMax(width,fm.horizontalAdvance(line));x+=width;
+        drawRun(painter,spec,run.first,x,runBaseline,color);
+        if (spec.verticalText) {
+          if (!run.first.isEmpty()) runBaseline += fm.height() * run.first.count(QLatin1Char('\n')) + fm.height();
+        } else x += fm.horizontalAdvance(run.first);
       }
     } else {
     drawRun(painter, spec, row.label, x, baseline, rowColor);
@@ -295,90 +298,88 @@ void renderPanel(QPainter* painter, const PanelSpec& spec,
   painter->restore();
 }
 
+namespace {
+class PreviewCanvas : public QWidget {
+ public:
+  explicit PreviewCanvas(QWidget* parent) : QWidget(parent) {}
+  void setContent(const PanelSpec& spec, const PreviewSamples& samples) {
+    spec_ = spec;
+    samples_ = samples;
+    const QSize size = panelSize(spec_, samples_).toSize() + QSize(48, 48);
+    setMinimumSize(size);
+    updateGeometry();
+    update();
+  }
+ protected:
+  void paintEvent(QPaintEvent*) override {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::TextAntialiasing);
+    const auto geometry = computeLayout(spec_, samples_);
+    if (geometry.panelSize.isEmpty()) return;
+    const QRectF panel(QPointF(24, 24), geometry.panelSize);
+    drawPanel(&painter, spec_, samples_, geometry, panel);
+  }
+ private:
+  PanelSpec spec_;
+  PreviewSamples samples_;
+};
+}  // namespace
+
 PreviewStrip::PreviewStrip(QWidget* parent) : QWidget(parent) {
-  setMinimumHeight(kStripHeight);
-  light_ = PanelSpec();
-  dark_ = PanelSpec();
+  setObjectName(QStringLiteral("previewScene"));
+  setAttribute(Qt::WA_StyledBackground);
+  setMinimumWidth(360);
+  auto* layout = new QVBoxLayout(this);
+  layout->setContentsMargins(20, 20, 20, 20);
+  layout->setSpacing(16);
+  auto* heading = new QLabel(QStringLiteral("实时预览 · 当前系统主题"), this);
+  heading->setObjectName(QStringLiteral("previewHeading"));
+  layout->addWidget(heading);
+  composition_ = new QLabel(this);
+  composition_->setObjectName(QStringLiteral("previewComposition"));
+  composition_->setWordWrap(true);
+  layout->addWidget(composition_);
+  scroll_ = new QScrollArea(this);
+  scroll_->setObjectName(QStringLiteral("candidatePreviewScroll"));
+  scroll_->setWidgetResizable(true);
+  scroll_->setFrameShape(QFrame::NoFrame);
+  scroll_->setWidget(new PreviewCanvas(scroll_));
+  layout->addWidget(scroll_, 1);
+  auto* note = new QLabel(QStringLiteral("原始字号预览，超出区域可滚动。\n毛玻璃与宽度记忆需在实际输入中验证。"), this);
+  note->setObjectName(QStringLiteral("previewNote"));
+  note->setWordWrap(true);
+  layout->addWidget(note);
   samples_ = PreviewSamples::defaults();
 }
 
 void PreviewStrip::setSpecs(const PanelSpec& light, const PanelSpec& dark) {
   light_ = light;
   dark_ = dark;
-  update();
+  refresh();
 }
 
 void PreviewStrip::setSamples(const PreviewSamples& samples) {
   samples_ = samples;
-  update();
+  refresh();
 }
 
-QSize PreviewStrip::sizeHint() const { return QSize(640, kStripHeight); }
-
-void PreviewStrip::paintEvent(QPaintEvent*) {
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing, true);
-
-  QRectF frame = rect().adjusted(0, 0, -1, -1);
-
-  // 单行（横排）时上下切分，竖排时左右切分 —— mac 用测量决定，这里直接
-  // 读配置值，避免测量误差导致预览与设置不一致。
-  const bool stackVertically = !light_.vertical;
-  const QRectF lightRect =
-      stackVertically ? QRectF(frame.left(), frame.top(), frame.width(),
-                               frame.height() / 2.0)
-                      : QRectF(frame.left(), frame.top(), frame.width() / 2.0,
-                               frame.height());
-  const QRectF darkRect =
-      stackVertically ? QRectF(frame.left(), frame.center().y(), frame.width(),
-                               frame.height() / 2.0)
-                      : QRectF(frame.center().x(), frame.top(), frame.width() / 2.0,
-                               frame.height());
-
-  QPainterPath clip;
-  clip.addRoundedRect(frame, kBackdropRadius, kBackdropRadius);
-  painter.setClipPath(clip);
-
-  for (const auto& half :
-       {qMakePair(lightRect, qMakePair(palette::card(this), light_)),
-        qMakePair(darkRect, qMakePair(palette::sidebar(this), dark_))}) {
-    painter.fillRect(half.first, half.second.first);
-    renderPanel(&painter, half.second.second, samples_,
-                half.first.adjusted(16, 16, -16, -16));
-  }
-
-  painter.setClipping(false);
-
-  // 角标：mac 的预览条左上有「浅色 / 深色」小胶囊。
-  const QFont caption = [this]() {
-    QFont f = font();
-    f.setPointSizeF(qMax(7.0, f.pointSizeF() - 2.0));
-    return f;
-  }();
-  painter.setFont(caption);
-  const QFontMetricsF captionMetrics(caption);
-  for (const auto& half :
-       {qMakePair(lightRect, QStringLiteral("浅色")),
-        qMakePair(darkRect, QStringLiteral("深色"))}) {
-    const qreal w = captionMetrics.horizontalAdvance(half.second) + 12;
-    const qreal h = captionMetrics.height() + 3;
-    const QRectF pill(half.first.left() + 7, half.first.top() + 6, w, h);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(255, 255, 255, 40));
-    painter.drawRoundedRect(pill, h / 2.0, h / 2.0);
-    painter.setPen(QColor(0, 0, 0, 140));
-    painter.drawText(pill, Qt::AlignCenter, half.second);
-  }
-
-  painter.setPen(QPen(QColor(0, 0, 0, 51), 1));
-  painter.drawRoundedRect(frame, kBackdropRadius, kBackdropRadius);
-  if (!stackVertically) {
-    painter.drawLine(QPointF(frame.center().x(), frame.top()),
-                     QPointF(frame.center().x(), frame.bottom()));
-  } else {
-    painter.drawLine(QPointF(frame.left(), frame.center().y()),
-                     QPointF(frame.right(), frame.center().y()));
-  }
+void PreviewStrip::setInlineCandidate(bool enabled) {
+  inlineCandidate_ = enabled;
 }
+
+void PreviewStrip::refresh() {
+  const auto& spec = palette::dark() ? dark_ : light_;
+  QString composing;
+  if (spec.inlinePreedit)
+    composing = inlineCandidate_ && !samples_.candidates.isEmpty()
+                    ? samples_.candidates.first().text : samples_.preedit;
+  composition_->setText(QStringLiteral("今天，") + composing + QStringLiteral("▏"));
+  static_cast<PreviewCanvas*>(scroll_->widget())->setContent(spec, samples_);
+}
+
+QSize PreviewStrip::sizeHint() const { return QSize(480, 460); }
+
+void PreviewStrip::paintEvent(QPaintEvent*) {}
 
 }  // namespace bangke

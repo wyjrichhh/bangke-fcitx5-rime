@@ -70,7 +70,7 @@ int runDumpUi(const QString& spec) {
   const QString path = parts.value(0);
   bangke::ensureSharedConfig();
   MainWindow window;
-  window.resize(1080, 800);
+  window.resize(1240, 840);
   if (parts.size() > 1) window.setPage(parts.at(1).toInt());
   window.show();
   QCoreApplication::processEvents();

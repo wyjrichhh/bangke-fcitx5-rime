@@ -105,6 +105,8 @@ HintIcon::HintIcon(const QString& hint, QWidget* parent) : QLabel(parent) {
 RowShell::RowShell(const QString& label, const QString& hint, QWidget* control,
                    QWidget* parent)
     : QWidget(parent) {
+  setProperty("settingLabel", label);
+  setAccessibleName(label);
   setMinimumHeight(64);
   auto* layout = new QHBoxLayout(this);
   layout->setContentsMargins(18, 12, 18, 12);
@@ -152,7 +154,8 @@ SliderRow::SliderRow(const QString& label, const QString& hint, double minimum,
   slider_->setSingleStep(1);
   slider_->setPageStep(1);
   slider_->setRange(0, qMax(1, int(qRound((maximum - minimum) / step_))));
-  slider_->setFixedWidth(164);
+  slider_->setMinimumWidth(96);
+  slider_->setMaximumWidth(140);
   layout->addWidget(slider_);
 
   value_ = makeLabel(QString(), true, container);
@@ -202,7 +205,10 @@ ComboRow::ComboRow(const QString& label, const QString& hint,
   for (int i = 0; i < items.size(); ++i) {
     combo_->addItem(items.at(i), i < values.size() ? values.at(i) : items.at(i));
   }
-  combo_->setMinimumWidth(160);
+  combo_->setMinimumWidth(156);
+  combo_->setMaximumWidth(220);
+  combo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  combo_->setMinimumContentsLength(9);
   if (auto* shell = qobject_cast<QHBoxLayout*>(this->layout()))
     shell->addWidget(combo_);
   setCurrentValue(current);
@@ -296,6 +302,19 @@ PageScaffold::PageScaffold(const QString& title, const QString& subtitle,
   outer->addWidget(scroll, 1);
 }
 
+void PageScaffold::addSideWidget(QWidget* widget) {
+  auto* outer = static_cast<QVBoxLayout*>(layout());
+  auto* scroll = findChild<QScrollArea*>();
+  outer->removeWidget(scroll);
+  auto* columns = new QHBoxLayout;
+  columns->setContentsMargins(32, 0, 32, 28);
+  columns->setSpacing(28);
+  layout_->setContentsMargins(0, 0, 8, 0);
+  columns->addWidget(scroll, 1);
+  columns->addWidget(widget, 1);
+  outer->addLayout(columns, 1);
+}
+
 void PageScaffold::addFixedWidget(QWidget* widget) {
   auto* container = new QWidget(this);
   auto* fixed = new QVBoxLayout(container);
@@ -317,7 +336,7 @@ void PageScaffold::addSection(const QString& title) {
   font.setBold(true);
   label->setFont(font);
   sectionLayout_->addWidget(label);
-  layout_->insertSpacing(layout_->count() - 1, 18);
+  if (layout_->count() > 1) layout_->insertSpacing(layout_->count() - 1, 18);
   layout_->insertWidget(layout_->count() - 1, group);
 }
 

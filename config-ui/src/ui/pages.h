@@ -85,11 +85,19 @@ class AppearancePage : public PageScaffold {
 // 行为页。mac 的菜单栏图标 / 通知 / 和弦时长在 Linux 上要么没有对应物、
 // 要么是前端实现（和弦），都不放。
 class BehaviorPage : public PageScaffold {
+  Q_OBJECT
  public:
   BehaviorPage(const RimeData& data, QWidget* parent = nullptr);
   void collect(RimeData* data) const;
+  void setPreviewStyle(const StyleOptions& style);
+
+ signals:
+  void changed();
 
  private:
+  void updatePreview();
+  PreviewStrip* preview_ = nullptr;
+  StyleOptions previewStyle_;
   SliderRow* pageSize_ = nullptr;
   ComboRow* shiftL_ = nullptr;
   ComboRow* shiftR_ = nullptr;
@@ -101,8 +109,15 @@ class AiPage : public PageScaffold {
  public:
   AiPage(const RimeData& data, QWidget* parent = nullptr);
   void collect(RimeData* data) const;
+  void setPreviewStyle(const StyleOptions& style);
+  void setPreviewBehavior(int pageSize, bool spellingHints);
 
  private:
+  void updatePreview();
+  PreviewStrip* preview_ = nullptr;
+  StyleOptions previewStyle_;
+  int previewPageSize_ = 5;
+  bool previewHints_ = false;
   ToggleRow* enabled_ = nullptr;
   ToggleRow* filterPunctuation_ = nullptr;
   ComboRow* device_ = nullptr;
