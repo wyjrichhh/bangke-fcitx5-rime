@@ -91,7 +91,14 @@ def type_text(name, text='jintiantianqihenhao'):
     assert str(controller.CurrentInputMethod()) == name
     endpoint, interface = ('/bangke', 'org.fcitx.Fcitx.Bangke1') if name == 'rime-ai' else ('/rime', 'org.fcitx.Fcitx.Rime1')
     service = dbus.Interface(bus.get_object('org.fcitx.Fcitx5', endpoint), interface)
+    # Cold-start deployment may not have created a usable Rime session yet.
+    for _ in range(300):
+        schema = str(service.GetCurrentSchema())
+        if schema and not schema.startswith('.'): break
+        pump(.1)
+    else: raise AssertionError(name+': Rime did not finish deployment')
     service.SetAsciiMode(False)
+    assert not service.IsAsciiMode(), name+': failed to enable Chinese input'
     context.SetCursorRect(450, 350, 2, 25)
     for key in text:
         context.ProcessKeyEvent(ord(key), 0, 0, False, 0)
