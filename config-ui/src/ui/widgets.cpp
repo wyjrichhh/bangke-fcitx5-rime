@@ -1,6 +1,7 @@
 #include "widgets.h"
 
 #include <QComboBox>
+#include <QAbstractItemView>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLineEdit>
@@ -206,6 +207,8 @@ ComboRow::ComboRow(const QString& label, const QString& hint,
   for (int i = 0; i < items.size(); ++i) {
     combo_->addItem(items.at(i), i < values.size() ? values.at(i) : items.at(i));
   }
+  combo_->setMaxVisibleItems(10);
+  combo_->view()->setMaximumHeight(320);
   combo_->setMinimumWidth(156);
   combo_->setMaximumWidth(220);
   combo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
