@@ -342,7 +342,7 @@ bool SettingsComboBox::eventFilter(QObject* watched, QEvent* event) {
     }
     if (event->type() == QEvent::KeyPress) {
       if (qEnvironmentVariableIsSet("BANGKE_TRACE_DROPDOWN_KEYS") && key->key() >= Qt::Key_Escape)
-        qInfo("Dropdown navigation key=%x target=%s", key->key(), watched->metaObject()->className());
+        qInfo("Dropdown navigation key=%x target=%s row=%d flags=%x visible=%d", key->key(), watched->metaObject()->className(), popupView_->currentIndex().row(), int(popupView_->currentIndex().flags()), popup_->isVisible());
       if (key->key() == Qt::Key_Escape) { hidePopup(); return true; }
       if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
         commitIndex(popupView_->currentIndex());
