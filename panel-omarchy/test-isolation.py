@@ -93,7 +93,7 @@ def type_text(name, text='jintiantianqihenhao'):
     for key in text:
         context.ProcessKeyEvent(ord(key), 0, 0, False, 0)
         pump(.015)
-    pump(.8)
+    pump(4)
 
 
 def assert_commit():
