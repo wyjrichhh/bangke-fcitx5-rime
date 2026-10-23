@@ -11,7 +11,7 @@
 #     sudo pacman -U bangke-pinyin-*.pkg.tar.zst
 pkgname=bangke-pinyin
 pkgver=5.0.19
-pkgrel=18
+pkgrel=19
 pkgdesc='蚌壳拼音 —— 基于 Rime 的 fcitx5 输入法（含 CTranslate2 AI 预测）'
 arch=('aarch64' 'x86_64')
 url='https://bangke.ai'
@@ -25,7 +25,7 @@ license=('BSD')
 # 装完系统里照样没有 libboost_filesystem.so.*，加载还是失败。Debian 系没这问题，
 # 一个 libboost-filesystem-dev 全给。
 depends=('fcitx5' 'ca-certificates' 'qt5-base' 'qt5-wayland' 'librime-data' 'boost-libs' 'google-glog'
-         'yaml-cpp' 'gflags' 'leveldb' 'marisa' 'opencc' 'lua' 'python' 'sudo' 'util-linux' 'gtk3' 'gtk-layer-shell'
+         'yaml-cpp' 'gflags' 'leveldb' 'marisa' 'opencc' 'libopencc.so' 'lua' 'python' 'sudo' 'util-linux' 'gtk3' 'gtk-layer-shell'
          'python-gobject' 'python-cairo' 'python-dbus' 'hyprland' 'gcc' 'pkgconf' 'glib2')
 # Independent addon and runtime: do not replace or provide upstream fcitx5-rime.
 optdepends=('noto-fonts-cjk: 面板中文字体（包内已带两款，这是额外兜底）')
