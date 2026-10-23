@@ -244,6 +244,9 @@ SettingsComboBox::SettingsComboBox(QWidget* parent) : QComboBox(parent) {
   popupView_->setObjectName(QStringLiteral("settingsComboPopup"));
   popupView_->viewport()->setObjectName(QStringLiteral("settingsComboViewport"));
   popupView_->setFrameShape(QFrame::NoFrame);
+  popupView_->setFocusPolicy(Qt::StrongFocus);
+  popup_->setFocusPolicy(Qt::StrongFocus);
+  popup_->setFocusProxy(popupView_);
   popupView_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   popupView_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   popupView_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -290,6 +293,7 @@ void SettingsComboBox::showPopup() {
   popup_->move(x, useAbove ? above.y() - popupHeight : below.y());
   popup_->ensurePolished();
   popupView_->ensurePolished();
+  popupView_->setFocus(Qt::PopupFocusReason);
   popup_->show();
   popupView_->setFocus(Qt::PopupFocusReason);
   popupView_->scrollTo(current, QAbstractItemView::PositionAtCenter);

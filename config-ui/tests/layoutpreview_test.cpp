@@ -248,6 +248,8 @@ int main(int argc, char** argv) {
       require(themed->popupView()->maximumHeight() <= 320, "Dropdown list height must be bounded");
       require(themed->popupContainer()->objectName() == QStringLiteral("settingsComboContainer"),
               "Popup frames must use the same theme as their viewports");
+      require(themed->popupContainer()->focusProxy() == themed->popupView(),
+              "Popup keyboard focus must be routed to the options list");
       if (combo->count() > 1) {
         const int original = combo->currentIndex();
         const int alternative = (original + 1) % combo->count();
