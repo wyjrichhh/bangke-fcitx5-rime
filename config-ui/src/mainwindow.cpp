@@ -70,7 +70,9 @@ void MainWindow::updateNavigationLayout() {
   // Equal side columns keep the tabs centered even when the captions differ.
   navigationLayout_->setColumnMinimumWidth(0, compact ? 0 : sideWidth);
   navigationLayout_->setColumnMinimumWidth(2, compact ? 0 : sideWidth);
+  navigationLayout_->setColumnStretch(0, compact ? 0 : 1);
   navigationLayout_->setColumnStretch(1, compact ? 1 : 0);
+  navigationLayout_->setColumnStretch(2, compact ? 0 : 1);
 }
 
 void MainWindow::buildUi() {

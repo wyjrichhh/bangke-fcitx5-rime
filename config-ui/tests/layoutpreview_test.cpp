@@ -328,6 +328,10 @@ int main(int argc, char** argv) {
         require(window.rect().contains(navigation->mapTo(&window, QPoint())) &&
                     navigation->mapTo(&window, navigation->rect().bottomRight()).x() < window.width(),
                 "Navigation must fit inside a narrow window");
+        if (navigation->sizeHint().width() + 96 <= window.width()) {
+          require(navigation->width() >= navigation->sizeHint().width(),
+                  "Compact navigation must use available space before scrolling");
+        }
         window.setPage(4);
         app.processEvents();
         require(navigation->rect().contains(navigation->tabRect(4).center()),
