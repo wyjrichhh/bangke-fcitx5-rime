@@ -9,6 +9,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QGridLayout>
+#include <QResizeEvent>
 #include <QTabBar>
 #include <QLabel>
 #include <QIcon>
@@ -40,9 +41,43 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   buildUi();
 }
 
+void MainWindow::resizeEvent(QResizeEvent* event) {
+  QMainWindow::resizeEvent(event);
+  updateNavigationLayout();
+}
+
+void MainWindow::changeEvent(QEvent* event) {
+  QMainWindow::changeEvent(event);
+  if (event->type() == QEvent::FontChange ||
+      event->type() == QEvent::ApplicationFontChange ||
+      event->type() == QEvent::StyleChange) {
+    updateNavigationLayout();
+  }
+}
+
+void MainWindow::updateNavigationLayout() {
+  if (!navigationLayout_ || !navigation_ || !navigationBrand_ ||
+      !navigationCaption_) return;
+  const auto margins = navigationLayout_->contentsMargins();
+  const int sideWidth = qMax(navigationBrand_->sizeHint().width(),
+                             navigationCaption_->sizeHint().width());
+  const int requiredWidth = navigation_->sizeHint().width() + 2 * sideWidth +
+                            2 * navigationLayout_->horizontalSpacing() +
+                            margins.left() + margins.right();
+  const bool compact = navigationLayout_->parentWidget()->width() < requiredWidth;
+  navigationBrand_->setVisible(!compact);
+  navigationCaption_->setVisible(!compact);
+  // Equal side columns keep the tabs centered even when the captions differ.
+  navigationLayout_->setColumnMinimumWidth(0, compact ? 0 : sideWidth);
+  navigationLayout_->setColumnMinimumWidth(2, compact ? 0 : sideWidth);
+  navigationLayout_->setColumnStretch(1, compact ? 1 : 0);
+}
+
 void MainWindow::buildUi() {
   setWindowTitle(YamlConfig::brandName() + QStringLiteral(" 设置"));
-  setMinimumSize(1060, 700);
+  // Tiling compositors may allocate less than the layout minimum. Keep the
+  // client surface at that actual size so Wayland input and painting agree.
+  setMinimumSize(1, 1);
   resize(1240, 840);
 
   auto* central = new QWidget(this);
@@ -53,13 +88,13 @@ void MainWindow::buildUi() {
   auto* navigation = new QWidget(central);
   navigation->setObjectName(QStringLiteral("topNavigation"));
   auto* nav = new QGridLayout(navigation);
+  navigationLayout_ = nav;
   nav->setContentsMargins(28, 16, 28, 16);
   nav->setHorizontalSpacing(20);
   nav->setColumnStretch(0, 1);
   nav->setColumnStretch(2, 1);
-  nav->setColumnMinimumWidth(0, 170);
-  nav->setColumnMinimumWidth(2, 170);
   auto* brand = new QLabel(YamlConfig::brandName(), navigation);
+  navigationBrand_ = brand;
   brand->setObjectName(QStringLiteral("navigationBrand"));
   nav->addWidget(brand, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
   navigation_ = new QTabBar(navigation);
@@ -67,9 +102,12 @@ void MainWindow::buildUi() {
   navigation_->setAccessibleName(QStringLiteral("设置分类"));
   navigation_->setExpanding(false);
   navigation_->setDrawBase(false);
+  navigation_->setUsesScrollButtons(true);
+  navigation_->setElideMode(Qt::ElideNone);
   for (const auto& title : kPageTitles) navigation_->addTab(title);
   nav->addWidget(navigation_, 0, 1, Qt::AlignCenter);
   auto* caption = new QLabel(QStringLiteral("本地 AI · 自在输入"), navigation);
+  navigationCaption_ = caption;
   caption->setProperty("secondary", true);
   nav->addWidget(caption, 0, 2, Qt::AlignRight | Qt::AlignVCenter);
   root->addWidget(navigation);
