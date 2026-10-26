@@ -21,6 +21,9 @@
 #include <QAbstractItemView>
 #include <QStyle>
 #include <QKeyEvent>
+#include <QMouseEvent>
+#include <QHoverEvent>
+#include <QCursor>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
@@ -39,6 +42,28 @@ void require(bool condition, const QString& message) {
     std::exit(1);
   }
 }
+class NavigationTrace : public QObject {
+ public:
+  using QObject::QObject;
+  bool eventFilter(QObject* watched, QEvent* event) override {
+    auto* tabs = qobject_cast<QTabBar*>(watched);
+    if (!tabs) return false;
+    QPoint point;
+    if (event->type() == QEvent::MouseMove) {
+      point = static_cast<QMouseEvent*>(event)->pos();
+    } else if (event->type() == QEvent::HoverMove) {
+      point = static_cast<QHoverEvent*>(event)->pos();
+    } else if (event->type() != QEvent::Enter && event->type() != QEvent::Leave &&
+               event->type() != QEvent::Resize) {
+      return false;
+    }
+    const auto cursor = QCursor::pos();
+    std::printf("input type=%d local=%d,%d tab=%d cursor=%d,%d nav=%d,%d,%d,%d\n",
+                int(event->type()), point.x(), point.y(), tabs->tabAt(point),
+                cursor.x(), cursor.y(), tabs->x(), tabs->y(), tabs->width(), tabs->height());
+    return false;
+  }
+};
 QWidget* setting(QWidget& page, const QString& name) {
   for (auto* child : page.findChildren<QWidget*>())
     if (child->property("settingLabel").toString() == name) return child;
@@ -70,7 +95,9 @@ int main(int argc, char** argv) {
     app.setStyleSheet(bangke::palette::styleSheet(nullptr));
     app.setApplicationName(QStringLiteral("bangke-navigation-test"));
     MainWindow window;
-    window.setWindowTitle(QStringLiteral("蚌壳拼音设置 · 平铺验证"));
+    window.setWindowTitle(QStringLiteral("蚌壳修复测试（非旧版）"));
+    NavigationTrace trace;
+    window.findChild<QTabBar*>("pageNavigation")->installEventFilter(&trace);
     window.show();
     QTimer report;
     QObject::connect(&report, &QTimer::timeout, [&]() {
@@ -85,7 +112,7 @@ int main(int argc, char** argv) {
       std::puts("");
     });
     report.start(1000);
-    QTimer::singleShot(600000, &app, &QApplication::quit);
+    QTimer::singleShot(3600000, &app, &QApplication::quit);
     return app.exec();
   }
   for (const auto* fixture : {"omarchy-tokyo-night", "omarchy-flexoki-light"}) {
