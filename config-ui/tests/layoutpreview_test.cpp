@@ -285,6 +285,31 @@ int main(int argc, char** argv) {
       require(navigation->currentIndex() == index, "Navigation failed");
     }
     window.setPage(0);
+    const auto originalFont = app.font();
+    for (const int fontSize : {13, 18}) {
+      auto font = originalFont;
+      font.setPixelSize(fontSize);
+      app.setFont(font);
+      for (const QSize size : {QSize(941, 700), QSize(620, 508), QSize(1500, 900)}) {
+        window.resize(size);
+        app.processEvents();
+        require(window.size() == size,
+                "Window must accept compositor allocations below layout minimum");
+        const auto center = navigation->mapTo(&window, navigation->rect().center());
+        require(qAbs(center.x() - window.rect().center().x()) <= 2,
+                "Navigation must stay centered after resizing or changing fonts");
+        require(window.rect().contains(navigation->mapTo(&window, QPoint())) &&
+                    navigation->mapTo(&window, navigation->rect().bottomRight()).x() < window.width(),
+                "Navigation must fit inside a narrow window");
+        window.setPage(4);
+        app.processEvents();
+        require(navigation->rect().contains(navigation->tabRect(4).center()),
+                "Selected tab must scroll into view in narrow windows");
+        window.setPage(0);
+      }
+    }
+    app.setFont(originalFont);
+    window.resize(1240, 840);
     app.processEvents();
     const QString output = QString::fromLocal8Bit(qgetenv("BANGKE_LAYOUT_SCREENSHOTS"));
     if (!output.isEmpty()) {
