@@ -10,6 +10,13 @@ BUILD_COMMIT=$(git -C "$PRIV" rev-parse --verify HEAD)
 git -C "$PRIV" merge-base --is-ancestor "$MAIN_COMMIT" "$BUILD_COMMIT" \
   || { echo "Refusing to package a branch that does not contain main: $MAIN_COMMIT" >&2; exit 1; }
 printf 'Main baseline: %s\nPackaging commit: %s\nPlatform: %s\n' "$MAIN_COMMIT" "$BUILD_COMMIT" "$(uname -m)"
+# The install step rewrites the build-tree RUNPATH to the private runtime directory.
+ADDON="$PKG/usr/lib/fcitx5/rime-ai.so"
+ADDON_RUNPATH=$(readelf -d "$ADDON" | awk '/\(RUNPATH\)|\(RPATH\)/ {sub(/.*\[/, ""); sub(/\].*/, ""); print}')
+case ":$ADDON_RUNPATH:" in
+  *":/usr/lib/fcitx5-rime-ai:"*) ;;
+  *) echo "Refusing to package addon without its installed private-runtime RUNPATH: $ADDON_RUNPATH" >&2; exit 1 ;;
+esac
 # Refresh lifecycle/data files without recompiling the already built native binaries.
 bash "$PRIV/dist/lifecycle/stage.sh" "$PKG" omarchy
 rm -f "$PKG/usr/share/rime-data/fcitx5.yaml"
