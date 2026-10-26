@@ -1,4 +1,5 @@
 # User data is checksum-managed by the shared lifecycle helper.
 post_install() { bash /usr/lib/bangke-pinyin/package.sh install; }
 post_upgrade() { post_install; }
-post_remove() { bash /var/lib/bangke-pinyin/lifecycle/package.sh remove; }
+# Stop desktop services while their ExecStop helpers still exist.
+pre_remove() { bash /var/lib/bangke-pinyin/lifecycle/package.sh remove; }
