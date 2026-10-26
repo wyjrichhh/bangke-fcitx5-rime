@@ -317,7 +317,7 @@ int main(int argc, char** argv) {
       app.setStyleSheet(originalStyle + QStringLiteral(
           "QTabBar#pageNavigation, QTabBar#pageNavigation::tab, "
           "QLabel#navigationBrand { font-size: %1px; }").arg(fontSize));
-      for (const QSize size : {QSize(941, 700), QSize(620, 508), QSize(1500, 900)}) {
+      for (const QSize size : {QSize(941, 700), QSize(620, 508), QSize(360, 508), QSize(1500, 900)}) {
         window.resize(size);
         app.processEvents();
         require(window.size() == size,
