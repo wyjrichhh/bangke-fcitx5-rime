@@ -65,6 +65,29 @@ int main(int argc, char** argv) {
   require(QDir().mkpath(dir), "Cannot create isolated Rime directory");
   require(QFile::copy(QStringLiteral(BANGKE_SOURCE_YAML), dir + "/bangke.yaml"),
           "Cannot copy fixture configuration");
+  if (app.arguments().contains(QStringLiteral("--live-navigation"))) {
+    bangke::setAppPlatformTheme(bangke::currentPlatformTheme());
+    app.setStyleSheet(bangke::palette::styleSheet(nullptr));
+    app.setApplicationName(QStringLiteral("bangke-navigation-test"));
+    MainWindow window;
+    window.setWindowTitle(QStringLiteral("蚌壳拼音设置 · 平铺验证"));
+    window.show();
+    QTimer report;
+    QObject::connect(&report, &QTimer::timeout, [&]() {
+      auto* tabs = window.findChild<QTabBar*>("pageNavigation");
+      const auto origin = tabs->mapTo(&window, QPoint());
+      std::printf("window=%dx%d nav=%d,%d,%d,%d tabs=", window.width(),
+                  window.height(), origin.x(), origin.y(), tabs->width(), tabs->height());
+      for (int i = 0; i < tabs->count(); ++i) {
+        const auto center = tabs->tabRect(i).center() + origin;
+        std::printf("%d:%d,%d ", i, center.x(), center.y());
+      }
+      std::puts("");
+    });
+    report.start(1000);
+    QTimer::singleShot(600000, &app, &QApplication::quit);
+    return app.exec();
+  }
   for (const auto* fixture : {"omarchy-tokyo-night", "omarchy-flexoki-light"}) {
     const auto platform = bangke::loadPlatformTheme(
         QStringLiteral(BANGKE_TEST_FIXTURES) + '/' + fixture);
