@@ -286,10 +286,14 @@ int main(int argc, char** argv) {
     }
     window.setPage(0);
     const auto originalFont = app.font();
+    const auto originalStyle = app.styleSheet();
     for (const int fontSize : {13, 18}) {
       auto font = originalFont;
       font.setPixelSize(fontSize);
       app.setFont(font);
+      app.setStyleSheet(originalStyle + QStringLiteral(
+          "QTabBar#pageNavigation, QTabBar#pageNavigation::tab, "
+          "QLabel#navigationBrand { font-size: %1px; }").arg(fontSize));
       for (const QSize size : {QSize(941, 700), QSize(620, 508), QSize(1500, 900)}) {
         window.resize(size);
         app.processEvents();
@@ -309,6 +313,7 @@ int main(int argc, char** argv) {
       }
     }
     app.setFont(originalFont);
+    app.setStyleSheet(originalStyle);
     window.resize(1240, 840);
     app.processEvents();
     const QString output = QString::fromLocal8Bit(qgetenv("BANGKE_LAYOUT_SCREENSHOTS"));
