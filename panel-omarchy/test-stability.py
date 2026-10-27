@@ -63,3 +63,33 @@ origin.apply(key,(1500,400),300,44,area,2,(1500,500,2,24))
 assert origin.height_limit(key,area,1000)==95
 assert origin.apply(key,(1000,0),416,5000,area,2)==(1500,400)
 print('PASS: taller complete text uses a bounded viewport above the caret without moving the origin')
+
+# Window layout changes must refresh an idle visible composition without a keypress.
+watch = next(n for n in panel.body if isinstance(n, ast.FunctionDef) and n.name == '_watch_placement')
+screen = SimpleNamespace(x=0, y=0, width=1920, height=1080)
+snapshot = ['browser', (967, 560, 941, 508), 'chromium']
+queries, updates = [], []
+def focus(*, force=False):
+    queries.append(force)
+    return tuple(snapshot)
+ns = {'S': {'im': 'ours'}, 'OUR_IM': 'ours',
+      'GLib': SimpleNamespace(SOURCE_REMOVE=False, SOURCE_CONTINUE=True),
+      'focused_window': focus}
+exec(compile(ast.Module(body=[watch], type_ignores=[]), 'panel.py', 'exec'), ns)
+fake = SimpleNamespace(get_visible=lambda: True, _screen=lambda: screen,
+                       _placement_watch_source=1,
+                       _placement_key=('browser', snapshot[1], (0, 0, 1920, 1080), 'style', 'composition'),
+                       queue_refresh=lambda: updates.append('refresh'))
+assert ns['_watch_placement'](fake) is True and not updates and queries == [True]
+# Candidate text and caret updates in the same layout must not unpin the panel.
+assert ns['_watch_placement'](fake) is True and not updates
+snapshot[1] = (0, 0, 1920, 1080)
+assert ns['_watch_placement'](fake) is True and updates == ['refresh']
+fake._placement_key = ('browser', snapshot[1], (0, 0, 1920, 1080), 'style', 'composition')
+updates.clear()
+screen.width, screen.height = 1512, 982
+assert ns['_watch_placement'](fake) is True and updates == ['refresh']
+fake.get_visible = lambda: False
+updates.clear()
+assert ns['_watch_placement'](fake) is False and fake._placement_watch_source == 0 and not updates
+print('PASS: idle composition follows fullscreen/output geometry changes; unchanged layout stays pinned; hidden panel stops watching')

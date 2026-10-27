@@ -112,7 +112,7 @@ _WIN_CACHE = {"t": 0.0, "key": None, "rect": None, "desc": ""}
 _CUR_CACHE = {"t": 0.0, "pos": None}
 
 
-def focused_window():
+def focused_window(force=False):
     """当前聚焦窗口 (key, rect, desc)：几何、标识、以及一行"是谁"（打日志用）。
 
     key 用来判断攒下的光标还作不作数；desc 用来回答"哪些应用给得出坐标" ——
@@ -124,13 +124,12 @@ def focused_window():
     Hyprland 用 `hyprctl`，sway 用 `swaymsg -t get_tree`。
     """
     now = time.monotonic()
-    if now - _WIN_CACHE["t"] < 0.5:          # 每次按键都 fork 一个进程太浪费
+    if not force and now - _WIN_CACHE["t"] < 0.5:  # Coalesce candidate update bursts.
         return _WIN_CACHE["key"], _WIN_CACHE["rect"], _WIN_CACHE["desc"]
     key, rect, desc = None, None, ""
     try:
         if shutil.which("hyprctl"):
-            d = json.loads(subprocess.run(["hyprctl", "-j", "activewindow"],
-                                          capture_output=True, text=True, timeout=1).stdout)
+            d = hypr_query("j/activewindow")
             if d.get("at") and d.get("size"):
                 key = str(d.get("address") or d.get("class") or "")
                 rect = (int(d["at"][0]), int(d["at"][1]), int(d["size"][0]), int(d["size"][1]))
@@ -189,30 +188,31 @@ def hypr_socket():
     return sock
 
 
-def plugin_caret():
-    """问 Hyprland 的 bangke-im-caret 插件要输入光标矩形 (x, y, w, h)，全局逻辑像素。
+def hypr_query(command):
+    """Read compositor state without spawning a process on the GTK thread."""
+    path = hypr_socket()
+    if not path:
+        return {}
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(0.15)
+        connection.connect(path)
+        connection.sendall(command.encode("utf-8"))
+        chunks = []
+        while True:
+            chunk = connection.recv(4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    return json.loads(b"".join(chunks).decode("utf-8"))
 
-    原生 Wayland 应用的光标只发给合成器（见 README），所以**只有装了那个插件**才拿得到；
-    没装就返回 None，退回下面那几条。装了以后 X11 应用也照样能拿到（那条路本来就有坐标）。
-    """
-    sock = hypr_socket()
-    if not sock:
-        return None
+
+def plugin_caret():
+    """Return the focused input caret in compositor logical coordinates."""
     try:
-        with socket.socket(socket.AF_UNIX) as s:
-            s.settimeout(0.15)
-            s.connect(sock)
-            s.sendall(b"bangkeimcaret")
-            chunks = []
-            while True:
-                b = s.recv(4096)
-                if not b:
-                    break
-                chunks.append(b)
-        d = json.loads(b"".join(chunks).decode("utf-8", "replace").strip())
-        if d.get("ok"):
-            return (int(d["x"]), int(d["y"]), int(d["w"]), int(d["h"]))
-    except Exception:  # noqa: BLE001  —— 没装插件 / 连接失败，都走兜底
+        data = hypr_query("bangkeimcaret")
+        if data.get("ok"):
+            return tuple(int(data[key]) for key in ("x", "y", "w", "h"))
+    except (OSError, ValueError, KeyError, TypeError):
         return None
     return None
 
@@ -756,6 +756,7 @@ class Panel(Gtk.Window):
         self._placement_area = None
         self._requested_size = None
         self._refresh_source = 0
+        self._placement_watch_source = 0
         self._theme_watches = []
         self._theme_reload_source = 0
         self._theme_generation = 0
@@ -831,6 +832,18 @@ class Panel(Gtk.Window):
             cand = "\n".join(cand)
         layout.set_text(cand, -1)
         return layout
+
+    def _watch_placement(self):
+        if not self.get_visible() or S["im"] != OUR_IM:
+            self._placement_watch_source = 0
+            return GLib.SOURCE_REMOVE
+        window_id, window_rect, _ = focused_window(force=True)
+        screen = self._screen()
+        context = (window_id, tuple(window_rect) if window_rect else None,
+                   (screen.x, screen.y, screen.width, screen.height) if screen else None)
+        if window_id and self._placement_key and context != self._placement_key[:3]:
+            self.queue_refresh()
+        return GLib.SOURCE_CONTINUE
 
     def queue_refresh(self):
         # One event-driven frame update for a burst of candidate/spot messages.
@@ -991,6 +1004,9 @@ class Panel(Gtk.Window):
         self._selected_before=S["cursor"]
         if not self.get_visible():
             self.show_all()
+        if HAS_LAYER_SHELL and not self._placement_watch_source:
+            # Text-input cursor updates can bypass Fcitx candidate notifications.
+            self._placement_watch_source = GLib.timeout_add(150, self._watch_placement)
         self.queue_draw()
         if self.get_window():
             region=_cairo.Region(_cairo.RectangleInt(0,0,*map(int,self._visible_size)))
