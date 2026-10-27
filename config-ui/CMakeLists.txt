@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(bangke-pinyin-config VERSION 5.0.22 LANGUAGES CXX)
+project(bangke-pinyin-config VERSION 5.0.23 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -2,7 +2,7 @@
 set -euo pipefail
 PRIV="${PRIV:-/priv}"
 OUT="${OUT:-/out}"
-VERSION="${VERSION:-5.0.22}"
+VERSION="${VERSION:-5.0.23}"
 PKG="$OUT/bangke-pkg"
 MAIN_BASELINE="${BANGKE_MAIN_BASELINE:-origin/main}"
 MAIN_COMMIT=$(git -C "$PRIV" rev-parse --verify "$MAIN_BASELINE^{commit}")
