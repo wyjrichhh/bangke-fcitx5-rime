@@ -757,6 +757,8 @@ class Panel(Gtk.Window):
         self._requested_size = None
         self._refresh_source = 0
         self._placement_watch_source = 0
+        self._placement_cursor = None
+        self._resize_cursor = None
         self._theme_watches = []
         self._theme_reload_source = 0
         self._theme_generation = 0
@@ -841,6 +843,22 @@ class Panel(Gtk.Window):
         screen = self._screen()
         context = (window_id, tuple(window_rect) if window_rect else None,
                    (screen.x, screen.y, screen.width, screen.height) if screen else None)
+        caret = plugin_caret()
+        if window_id and window_rect and caret:
+            local = (caret[0] - window_rect[0], caret[1] - window_rect[1], *caret[2:])
+            previous = self._placement_cursor
+            identity = (window_id, S["composition"])
+            if previous and previous[0] == identity:
+                if previous[1][2:] != tuple(window_rect)[2:]:
+                    # A compositor resize can precede the client's new cursor rectangle.
+                    self._resize_cursor = previous[2]
+                if self._resize_cursor is not None and local != self._resize_cursor:
+                    self._composition_origin.reset()
+                    self._resize_cursor = None
+                    self.queue_refresh()
+            else:
+                self._resize_cursor = None
+            self._placement_cursor = (identity, tuple(window_rect), local)
         if window_id and self._placement_key and context != self._placement_key[:3]:
             self.queue_refresh()
         return GLib.SOURCE_CONTINUE
@@ -953,6 +971,11 @@ class Panel(Gtk.Window):
             t, b, l, r = monitor_inset()
             area = Area(geo.x + l, geo.y + t, geo.width - l - r, geo.height - t - b) if geo else None
             px, py, src, caret = place_target(w, ph, area, scale)
+            identity = (win_id, S["composition"])
+            if caret and win_rect and (not self._placement_cursor or self._placement_cursor[0] != identity):
+                local = (caret[0] - win_rect[0], caret[1] - win_rect[1], *caret[2:])
+                self._placement_cursor = (identity, tuple(win_rect), local)
+                self._resize_cursor = None
             if S["im"] == OUR_IM:
                 px,py = self._composition_origin.apply(self._placement_key,(px,py),w,ph,area,2 if src.startswith("光标") else 1,caret)
             # 贴边翻转：下面放不下就挪到光标上方，右边放不下就右对齐。

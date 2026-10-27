@@ -69,24 +69,37 @@ watch = next(n for n in panel.body if isinstance(n, ast.FunctionDef) and n.name 
 screen = SimpleNamespace(x=0, y=0, width=1920, height=1080)
 snapshot = ['browser', (967, 560, 941, 508), 'chromium']
 queries, updates = [], []
+cursor = [1225, 834, 0, 29]
+resets = []
 def focus(*, force=False):
     queries.append(force)
     return tuple(snapshot)
-ns = {'S': {'im': 'ours'}, 'OUR_IM': 'ours',
+ns = {'S': {'im': 'ours', 'composition': 'composition'}, 'OUR_IM': 'ours',
       'GLib': SimpleNamespace(SOURCE_REMOVE=False, SOURCE_CONTINUE=True),
-      'focused_window': focus}
+      'focused_window': focus, 'plugin_caret': lambda: tuple(cursor)}
 exec(compile(ast.Module(body=[watch], type_ignores=[]), 'panel.py', 'exec'), ns)
 fake = SimpleNamespace(get_visible=lambda: True, _screen=lambda: screen,
-                       _placement_watch_source=1,
+                       _placement_watch_source=1, _placement_cursor=None, _resize_cursor=None,
+                       _composition_origin=SimpleNamespace(reset=lambda: resets.append('reset')),
                        _placement_key=('browser', snapshot[1], (0, 0, 1920, 1080), 'style', 'composition'),
                        queue_refresh=lambda: updates.append('refresh'))
 assert ns['_watch_placement'](fake) is True and not updates and queries == [True]
 # Candidate text and caret updates in the same layout must not unpin the panel.
 assert ns['_watch_placement'](fake) is True and not updates
 snapshot[1] = (0, 0, 1920, 1080)
+cursor[:] = [258, 274, 0, 29]
 assert ns['_watch_placement'](fake) is True and updates == ['refresh']
 fake._placement_key = ('browser', snapshot[1], (0, 0, 1920, 1080), 'style', 'composition')
 updates.clear()
+# The compositor moved the old local rectangle before Chromium commits its layout.
+cursor[:] = [258, 274, 0, 29]
+assert ns['_watch_placement'](fake) is True and not resets and not updates
+# A later client cursor commit must correct the pinned point even with unchanged geometry.
+cursor[:] = [748, 516, 0, 30]
+assert ns['_watch_placement'](fake) is True and resets == ['reset'] and updates == ['refresh']
+updates.clear()
+cursor[0] += 20
+assert ns['_watch_placement'](fake) is True and not updates and resets == ['reset']
 screen.width, screen.height = 1512, 982
 assert ns['_watch_placement'](fake) is True and updates == ['refresh']
 fake.get_visible = lambda: False
