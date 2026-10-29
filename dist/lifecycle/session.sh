@@ -19,6 +19,7 @@ flock -x 9
 exec >> "$CACHE/setup.log" 2>&1
 echo "$(date -Is) $ACTION"
 BASE="${BANGKE_LIFECYCLE_DIR:-/usr/lib/bangke-pinyin}"
+systemctl --user daemon-reload || true
 systemctl --user stop bangke-update-monitor.service || true
 UNIT=omarchy-fcitx5.service
 MANAGED=0

@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 repo = Path(__file__).resolve().parents[1]
@@ -112,6 +113,29 @@ with tempfile.TemporaryDirectory() as root:
         assert result.stdout == expected, result.stdout
 print('PASS: Ubuntu package version follows CMake and preserves explicit overrides')
 
+if sys.platform.startswith('linux'):
+    # Debian maintainer scripts use GNU cp; BSD cp has different skip exit codes.
+    restore = package[package.index('if [ -d /var/lib/bangke-pinyin-upgrade-state ]; then'):
+                      package.index('bash /usr/lib/bangke-pinyin/package.sh install')]
+    with tempfile.TemporaryDirectory() as root:
+        root = Path(root)
+        old, current = root / 'backup', root / 'current'
+        old.mkdir(); current.mkdir()
+        (old / 'users').write_text('old-user\n')
+        (current / 'users').write_text('current-user\n')
+        (old / 'missing').write_text('retained\n')
+        restore = restore.replace('/var/lib/bangke-pinyin-upgrade-state', str(old))
+        restore = restore.replace('/var/lib/bangke-pinyin', str(current))
+        result = subprocess.run(['bash', '-ec', restore], check=True, capture_output=True, text=True)
+        assert not result.stderr, result.stderr
+        assert (current / 'users').read_text() == 'current-user\n'
+        assert (current / 'missing').read_text() == 'retained\n'
+        assert not old.exists()
+    print('PASS: upgrade state restoration preserves newer records without cp compatibility warnings')
+
+else:
+    print('INFO: GNU cp upgrade restoration is exercised on the Ubuntu host')
+
 # The Ubuntu entry point must preserve the caller's package version. System
 # os-release also defines VERSION (a human-readable string with spaces).
 entry = (repo / 'dist/build-ubuntu24.sh').read_text()
@@ -136,7 +160,8 @@ with tempfile.TemporaryDirectory() as root:
     fixtures = {
         'id': 'echo 1000\n',
         'flock': 'exit 0\n',
-        'systemctl': '''case "$*" in
+        'systemctl': '''printf '%s\\n' "$*" >> "$HOME/service-calls"
+case "$*" in
 *show-environment*) printf 'DISPLAY=:99\\nXAUTHORITY=%s\\nXDG_CURRENT_DESKTOP=GNOME\\n' "$TEST_DESKTOP_AUTH" ;;
 *is-active*) exit 0 ;;
 *" start "*) printf '%s' "$XAUTHORITY" > "$HOME/restarted-auth" ;;
@@ -157,4 +182,6 @@ esac
     env.pop('XAUTHORITY', None)
     subprocess.run(['bash', str(repo / 'dist/lifecycle/session.sh'), 'install'], env=env, check=True)
     assert (home / 'restarted-auth').read_text() == auth
+    calls = (home / 'service-calls').read_text().splitlines()
+    assert calls.index('--user daemon-reload') < calls.index('--user stop bangke-update-monitor.service')
 print('PASS: package lifecycle restores desktop authentication before restarting the input method')

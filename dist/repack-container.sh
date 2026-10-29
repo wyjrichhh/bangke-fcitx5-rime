@@ -165,7 +165,12 @@ cat > "$STAGE/DEBIAN/postinst" <<'EOF'
 # quarantined records only after dpkg has finished calling that old script.
 if [ -d /var/lib/bangke-pinyin-upgrade-state ]; then
   mkdir -p /var/lib/bangke-pinyin
-  cp -an /var/lib/bangke-pinyin-upgrade-state/. /var/lib/bangke-pinyin/
+  # New coreutils warns about -n; retain compatibility with Ubuntu 22.04's cp.
+  if cp --help 2>/dev/null | grep -Fq -- '--update[=UPDATE]'; then
+    cp -a --update=none /var/lib/bangke-pinyin-upgrade-state/. /var/lib/bangke-pinyin/ || exit 1
+  else
+    cp -an /var/lib/bangke-pinyin-upgrade-state/. /var/lib/bangke-pinyin/ || exit 1
+  fi
   rm -rf /var/lib/bangke-pinyin-upgrade-state
 fi
 bash /usr/lib/bangke-pinyin/package.sh install
