@@ -74,9 +74,12 @@ else
   rm -rf /out/librime/include/glog /out/librime/include/yaml-cpp \
          /out/librime/include/leveldb /out/librime/include/marisa \
          /out/librime/include/opencc /out/librime/include/gtest
-  rm -rf /out/librime/plugins/librime-ai-predict
+  rm -rf /out/librime/plugins/ai-predict /out/librime/plugins/librime-ai-predict
   mkdir -p /out/librime/plugins/librime-ai-predict
   cp -a /plugin/. /out/librime/plugins/librime-ai-predict/
+  # Git checkouts do not include the vendor-supplied Lua plugin.
+  rm -rf /out/librime/plugins/lua
+  cp -a /vendor/librime-lua /out/librime/plugins/lua
   # 夹带的 AppleDouble（._*）会被当源码编，清一遍。
   find /out/librime -name '._*' -delete 2>/dev/null || true
   rm -rf /out/librime/plugins/librime-ai-predict/deps \

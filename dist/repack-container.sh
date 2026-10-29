@@ -23,7 +23,8 @@ apt-get install -y -qq cmake >/dev/null 2>&1
 [ -f /priv/dist/im-brand.env ] && . /priv/dist/im-brand.env
 IM_NAME="${IM_NAME:-蚌壳拼音}"
 
-VERSION="${VERSION:-5.0.19}"
+VERSION="${VERSION:-$(sed -n 's/^project(fcitx5-rime VERSION \([0-9.]*\)).*/\1/p' /priv/CMakeLists.txt)}"
+[ -n "$VERSION" ] || { echo 'Cannot determine Ubuntu package version from CMakeLists.txt' >&2; exit 1; }
 ARCH=amd64
 PKG=fcitx5-rime-ai-predict
 PRIVLIB=/usr/lib/fcitx5-rime-ai

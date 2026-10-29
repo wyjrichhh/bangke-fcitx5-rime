@@ -71,6 +71,47 @@ esac
     assert (home / 'enabled').exists() and not record.exists()
 print('PASS: Ubuntu package layout, panel conflict, deferred first login, idempotent enable/remove, user choice preservation')
 
+# A clean Git checkout has no vendored Lua plugin and may contain a macOS-only
+# AI symlink. Exercise the actual staging commands with isolated source inputs.
+build = (repo / 'dist/build-22.04.sh').read_text()
+start = build.index('  rm -rf /out/librime/plugins/')
+end = build.index('  find /out/librime', start)
+with tempfile.TemporaryDirectory() as root:
+    root = Path(root)
+    plugins = root / 'out/librime/plugins'
+    ai, lua, external = root / 'plugin', root / 'vendor/librime-lua', root / 'external'
+    for path in (plugins, ai, lua, external): path.mkdir(parents=True)
+    (ai / 'CMakeLists.txt').write_text('# AI source\n')
+    (lua / 'CMakeLists.txt').write_text('# Lua source\n')
+    (external / 'keep').touch()
+    (plugins / 'ai-predict').symlink_to(external, target_is_directory=True)
+    stage = build[start:end]
+    for source, target in (('/out', root / 'out'), ('/plugin/', ai), ('/vendor', root / 'vendor')):
+        stage = stage.replace(source, str(target) + ('/' if source.endswith('/') else ''))
+    subprocess.run(['bash', '-ec', stage], check=True)
+    assert (plugins / 'lua/CMakeLists.txt').read_text() == '# Lua source\n'
+    assert (plugins / 'librime-ai-predict/CMakeLists.txt').read_text() == '# AI source\n'
+    assert not (plugins / 'ai-predict').exists()
+    assert (external / 'keep').exists()
+print('PASS: clean Ubuntu source staging includes Lua and AI without retaining host symlinks')
+
+# Default package metadata must follow the frontend version, while explicit
+# Debian test versions remain supported.
+package = (repo / 'dist/repack-container.sh').read_text()
+version = package[package.index('VERSION='):package.index('\nARCH=')]
+with tempfile.TemporaryDirectory() as root:
+    root = Path(root)
+    (root / 'CMakeLists.txt').write_text('project(fcitx5-rime VERSION 6.7.8)\n')
+    script = version.replace('/priv', str(root)) + '\nprintf "%s" "$VERSION"'
+    environment = {key: value for key, value in os.environ.items() if key != 'VERSION'}
+    for override, expected in ((None, '6.7.8'), ('5.0.99+gnome1', '5.0.99+gnome1')):
+        env = dict(environment)
+        if override: env['VERSION'] = override
+        result = subprocess.run(['bash', '-ec', script], env=env,
+                                check=True, capture_output=True, text=True)
+        assert result.stdout == expected, result.stdout
+print('PASS: Ubuntu package version follows CMake and preserves explicit overrides')
+
 # The Ubuntu entry point must preserve the caller's package version. System
 # os-release also defines VERSION (a human-readable string with spaces).
 entry = (repo / 'dist/build-ubuntu24.sh').read_text()
