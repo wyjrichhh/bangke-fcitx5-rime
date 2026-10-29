@@ -11,6 +11,9 @@ bus = dbus.SessionBus()
 names = [dbus.service.BusName(n, bus) for n in ('org.bangke.Panel', 'org.fcitx.Fcitx5')]
 class Panel(dbus.service.Object):
     @dbus.service.method('org.bangke.Panel1', in_signature='', out_signature='s')
+    def GetAppearance(self):
+        with open(os.environ['LAYOUT_LOG'] + '.json') as f: return f.read()
+    @dbus.service.method('org.bangke.Panel1', in_signature='', out_signature='s')
     def GetPanelIdentity(self): return 'bangke-panel:test'
     @dbus.service.method('org.bangke.Panel1', in_signature='s', out_signature='s')
     def SetLayout(self, orientation):

@@ -15,6 +15,7 @@
 #include "mainwindow.h"
 #include "rimedeploy.h"
 #include "theme/paths.h"
+#include "yamlconfig.h"
 
 int main(int argc, char** argv) {
   QApplication app(argc, argv);
@@ -65,6 +66,10 @@ int main(int argc, char** argv) {
   QDir().mkpath(QFileInfo(bangke::paths::classicUiConf()).absolutePath());
   const QByteArray sentinel("Theme=SomeoneElse\nVertical Candidate List=False\n");
   { QFile f(bangke::paths::classicUiConf()); if (!f.open(QIODevice::WriteOnly)) return 2; f.write(sentinel); }
+  // The removed highlight-radius control must preserve existing advanced YAML.
+  auto initial = YamlConfig::load();
+  initial.style.hilitedCornerRadius = 12;
+  if (!YamlConfig::save(initial)) return 18;
   for (const QString orientation : {QStringLiteral("vertical"), QStringLiteral("horizontal")}) {
     MainWindow window;
     bool found = false;
@@ -73,12 +78,13 @@ int main(int argc, char** argv) {
       if (index >= 0) { combo->setCurrentIndex(index); found = true; break; }
     }
     if (!found) return 3;
-    const QMap<QString, double> values{{QStringLiteral("圆角半径"), 24}, {QStringLiteral("高亮圆角"), 12},
+    const QMap<QString, double> values{{QStringLiteral("圆角半径"), 24},
       {QStringLiteral("字号"), 19}, {QStringLiteral("背景透明度"), .35}, {QStringLiteral("阴影大小"), 8},
       {QStringLiteral("边框宽度"), 3}, {QStringLiteral("边框高度"), 2}, {QStringLiteral("行间距"), 6},
       {QStringLiteral("预编辑间距"), 7}};
     for (auto* row : window.findChildren<bangke::SliderRow*>()) {
       for (auto* label : row->findChildren<QLabel*>()) {
+        if (label->text() == QStringLiteral("高亮圆角")) return 19;
         if (values.contains(label->text())) {
           row->setValue(values.value(label->text()));
           if (qAbs(row->value() - values.value(label->text())) > .001) return 7;
@@ -113,8 +119,16 @@ int main(int argc, char** argv) {
     if (!applied) return 17;
     QFile f(bangke::paths::classicUiConf());
     if (!f.open(QIODevice::ReadOnly) || f.readAll() != sentinel) return 6;
-    auto call = QDBusMessage::createMethodCall("org.bangke.Panel", "/org/bangke/Panel", "org.bangke.Panel1", "GetAppearance");
+    const bool gnome = qgetenv("BANGKE_PANEL_BACKEND") == "gnome";
+    auto call = QDBusMessage::createMethodCall(
+        gnome ? "org.kde.impanel" : "org.bangke.Panel",
+        gnome ? "/org/kde/impanel" : "/org/bangke/Panel",
+        gnome ? "org.kde.impanel2" : "org.bangke.Panel1", "GetAppearance");
     auto reply = QDBusConnection::sessionBus().call(call);
+    if (reply.type() == QDBusMessage::ErrorMessage) {
+      std::fprintf(stderr, "GetAppearance failed: %s\n", qPrintable(reply.errorMessage()));
+      return 8;
+    }
     auto style = QJsonDocument::fromJson(reply.arguments().value(0).toString().toUtf8()).object()["style"].toObject();
     const QMap<QString, double> expected{{"corner_radius",24},{"hilited_corner_radius",12},{"font_point",19},
       {"alpha",.65},{"shadow_size",8},{"border_width",3},{"border_height",2},{"line_spacing",6},{"spacing",7}};
